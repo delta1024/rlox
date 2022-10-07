@@ -125,8 +125,8 @@ impl Debug for Chunk {
                     ));
                 }
 
-                OpCode::Return | OpCode::Negate => {
-                    out.push_str(&format!("{}", OpCode::from(i)));
+                OpCode::Return | OpCode::Negate | OpCode::Add | OpCode::Subtract | OpCode::Multiply | OpCode::Divide => {
+                    out.push_str(&format!("{}\n", OpCode::from(i)));
                 }
             }
         }
@@ -190,7 +190,7 @@ impl Ip {
                 let m = unsafe { self.get_constant(n) };
                 format!("{:04} {} {:<9}{} '{}'", offset, op, " ", n, m)
             }
-            OpCode::Return | OpCode::Negate => format!("{:04} {}", offset, op),
+            OpCode::Return | OpCode::Negate | OpCode::Add | OpCode::Subtract | OpCode::Multiply | OpCode::Divide => format!("{:04} {}", offset, op),
         }
     }
 }
@@ -213,17 +213,25 @@ pub enum OpCode {
     Return,
     Constant,
     Negate,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
 }
 
 impl Display for OpCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}",
+            "OP_{}",
             match self {
-                Self::Return => "OP_RETURN",
-                Self::Constant => "OP_CONSTANT",
-                Self::Negate => "OP_NEGATE",
+                Self::Return => "RETURN",
+                Self::Constant => "CONSTANT",
+                Self::Negate => "NEGATE",
+                Self::Add => "ADD",
+                Self::Subtract => "SUBTRACT",
+                Self::Multiply => "MULTIPLY",
+                Self::Divide => "DIVIDE",
             }
         )
     }
@@ -235,6 +243,10 @@ impl From<OpCode> for u8 {
             OpCode::Return => 0,
             OpCode::Constant => 1,
             OpCode::Negate => 2,
+            OpCode::Add => 3,
+            OpCode::Subtract => 4,
+            OpCode::Multiply => 5,
+            OpCode::Divide => 6,
         }
     }
 }
@@ -245,6 +257,10 @@ impl From<u8> for OpCode {
             0 => OpCode::Return,
             1 => OpCode::Constant,
             2 => OpCode::Negate,
+            3 => OpCode::Add,
+            4 => OpCode::Subtract,
+            5 => OpCode::Multiply,
+            6 => OpCode::Divide,
             _ => panic!("Unrecongnised OpCode: {}", byte),
         }
     }

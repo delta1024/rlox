@@ -76,6 +76,20 @@ impl Vm {
 
         println!("{}", instruction);
     }
+    
+    fn binary_op(operator: OpCode) -> Result<()> {
+        let b = Vm::pop();
+        let a = Vm::pop();
+        Vm::push(match  operator { 
+            OpCode::Add => a + b,
+            OpCode::Subtract => a - b,
+            OpCode::Multiply => a * b,
+            OpCode::Divide => a / b,
+            _ => unreachable!(),
+
+        });
+        Ok(())
+    }
     fn run() -> Result<()> {
         loop {
             let instruction = Vm::read_byte();
@@ -102,7 +116,8 @@ impl Vm {
                     let constant = Vm::read_constant();
                     Vm::push(constant);
                 }
-                OpCode::Negate => Vm::push(-Vm::pop())
+                OpCode::Negate => Vm::push(-Vm::pop()),
+                OpCode::Add | OpCode::Subtract | OpCode::Divide | OpCode::Multiply => Vm::binary_op(instruction.into())?,
             }
         }
     }
