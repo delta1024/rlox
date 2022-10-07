@@ -1,4 +1,7 @@
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    pin::Pin,
+};
 
 use crate::value::Value;
 #[derive(Debug)]
@@ -19,12 +22,12 @@ impl Lines {
                 return;
             }
         }
-        
+
         self.code.push((new_line, 1));
     }
 
     pub fn get_line(&self, mut pos: usize) -> Option<usize> {
-        for (line,count)  in &self.code {
+        for (line, count) in &self.code {
             if pos > *count {
                 pos -= *count;
             } else {
@@ -68,7 +71,11 @@ impl Chunk {
         (self.constants.len() - 1) as u8
     }
 
-    pub fn ip(&self) -> Ip {
+    pub fn pin(self) -> Pin<Box<Self>> {
+        Box::pin(self)
+    }
+
+    pub fn ip(self: Pin<&Self>) -> Ip {
         Ip {
             head: self.code.as_ptr(),
             tail: unsafe { self.code.as_ptr().add(self.code.len()) },
@@ -84,7 +91,7 @@ impl Debug for Chunk {
         let mut out = format!("== {} ==\n", self.name());
 
         let mut line = 0;
-        let mut ip = self.ip().enumerate();
+        let mut ip = Ip::new(self).enumerate();
         loop {
             let (off, i) = match ip.next() {
                 Some(byte) => byte,
@@ -96,22 +103,26 @@ impl Debug for Chunk {
                     self.lines.get_line(off - 1)
                 } else {
                     self.lines.get_line(off)
-                }.unwrap();
+                }
+                .unwrap();
                 if last_line != line {
                     line = self.lines.get_line(off).unwrap();
                     out.push_str(&format!("{:04} ", line));
                 } else {
                     out.push_str("   | ");
                 }
-
-
             }
+
             match i.into() {
                 OpCode::Constant => {
                     let (_, n) = ip.next().unwrap();
-                    out.push_str(&format!("{}{:<10} {} '{}'\n", OpCode::from(i), " " , n,  unsafe {
-                        self.ip().get_constant(n)
-                    }));
+                    out.push_str(&format!(
+                        "{}{:<10} {} '{}'\n",
+                        OpCode::from(i),
+                        " ",
+                        n,
+                        unsafe { Ip::new(self).get_constant(n) }
+                    ));
                 }
 
                 OpCode::Return => {
@@ -126,7 +137,7 @@ impl IntoIterator for &Chunk {
     type Item = u8;
     type IntoIter = Ip;
     fn into_iter(self) -> Self::IntoIter {
-        self.ip()
+        Ip::new(self)
     }
 }
 
@@ -176,6 +187,15 @@ pub struct Ip {
     constants: *const Value,
 }
 impl Ip {
+    fn new(chunk: &Chunk) -> Self {
+        Ip {
+            head: chunk.code.as_ptr(),
+            tail: unsafe { chunk.code.as_ptr().add(chunk.code.len()) },
+            current: chunk.code.as_ptr(),
+            lines: &chunk.lines,
+            constants: chunk.constants.as_ptr(),
+        }
+    }
     pub unsafe fn get_constant(&self, pos: u8) -> Value {
         self.constants.add(pos as usize).read()
     }
@@ -186,9 +206,27 @@ impl Ip {
         if self.head == self.current {
             return None;
         }
-        
-        unsafe {
-            Some(self.current.sub(1).read())
+
+        unsafe { Some(self.current.sub(1).read()) }
+    }
+    pub fn peek(&self) -> Option<u8> {
+        if self.current == self.tail {
+            return None;
+        }
+
+        unsafe { Some(self.current.read()) }
+    }
+    pub fn disassemble_instruction(&self) -> String {
+        let offset = unsafe { self.current.offset_from(self.head) };
+
+        let op: OpCode = unsafe { self.current.sub(1).read().into() };
+        match op {
+            OpCode::Constant => {
+                let n = self.peek().unwrap();
+                let m = unsafe { self.get_constant(n) };
+                format!("{:04} {} {:<9}{} '{}'", offset, op, " ", n, m)
+            }
+            OpCode::Return => format!("{:04} {}", offset, op),
         }
     }
 }

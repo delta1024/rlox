@@ -3,13 +3,20 @@ mod value {
 }
 
 mod chunk;
+mod vm;
 use chunk::{Chunk, OpCode};
 fn main() {
     let mut chunk = Chunk::new();
 
-    let pos = chunk.constant(123 as f64);
+    let pos = chunk.constant(23.3 as f64);
     chunk.write(OpCode::Constant, 123);
     chunk.write(pos, 123);
     chunk.write(OpCode::Return, 123);
-    println!("{:?}", chunk);
+
+    match vm::Vm::interpret(chunk) {
+        Err(err) => {
+            eprintln!("{:?}", err);
+        }
+        Ok(()) => (),
+    }
 }
