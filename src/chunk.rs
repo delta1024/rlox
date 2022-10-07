@@ -126,7 +126,7 @@ impl Debug for Chunk {
                 }
 
                 OpCode::Return => {
-                    out.push_str("OP_RETURN");
+                    out.push_str(&format!("{}", OpCode::from(i)));
                 }
             }
         }
@@ -141,43 +141,6 @@ impl IntoIterator for &Chunk {
     }
 }
 
-#[derive(Debug)]
-pub enum OpCode {
-    Return,
-    Constant,
-}
-
-impl Display for OpCode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Return => "OP_RETURN",
-                Self::Constant => "OP_CONSTANT",
-            }
-        )
-    }
-}
-
-impl From<OpCode> for u8 {
-    fn from(code: OpCode) -> Self {
-        match code {
-            OpCode::Return => 0,
-            OpCode::Constant => 1,
-        }
-    }
-}
-
-impl From<u8> for OpCode {
-    fn from(byte: u8) -> Self {
-        match byte {
-            0 => OpCode::Return,
-            1 => OpCode::Constant,
-            _ => panic!("Unrecongnised OpCode: {}", byte),
-        }
-    }
-}
 
 pub struct Ip {
     head: *const u8,
@@ -186,6 +149,7 @@ pub struct Ip {
     lines: *const Lines,
     constants: *const Value,
 }
+
 impl Ip {
     fn new(chunk: &Chunk) -> Self {
         Ip {
@@ -230,6 +194,7 @@ impl Ip {
         }
     }
 }
+
 impl Iterator for Ip {
     type Item = u8;
     fn next(&mut self) -> Option<Self::Item> {
@@ -239,6 +204,44 @@ impl Iterator for Ip {
         unsafe {
             self.current = self.current.add(1);
             Some(self.current.sub(1).read())
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum OpCode {
+    Return,
+    Constant,
+}
+
+impl Display for OpCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Return => "OP_RETURN",
+                Self::Constant => "OP_CONSTANT",
+            }
+        )
+    }
+}
+
+impl From<OpCode> for u8 {
+    fn from(code: OpCode) -> Self {
+        match code {
+            OpCode::Return => 0,
+            OpCode::Constant => 1,
+        }
+    }
+}
+
+impl From<u8> for OpCode {
+    fn from(byte: u8) -> Self {
+        match byte {
+            0 => OpCode::Return,
+            1 => OpCode::Constant,
+            _ => panic!("Unrecongnised OpCode: {}", byte),
         }
     }
 }

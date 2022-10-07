@@ -1,13 +1,19 @@
-use std::{fmt, pin::Pin, result};
-use crate::{chunk::{self, OpCode, Ip}, value::Value};
+use crate::{
+    chunk::{self, Ip, OpCode},
+    value::Value,
+};
+use std::{fmt, pin::Pin, ptr, result};
 
 static mut VM: Vm = Vm::new();
 
 pub type Result<T> = result::Result<T, Error>;
 type Chunk = Pin<Box<chunk::Chunk>>;
+const STACK_MAX: usize = 256;
 pub struct Vm {
-    chunk:  Option<Chunk>,
+    chunk: Option<Chunk>,
     ip: Option<Ip>,
+    stack: [Value; STACK_MAX],
+    stack_top: *mut Value,
 }
 
 impl Vm {
@@ -15,9 +21,33 @@ impl Vm {
         Vm {
             chunk: None,
             ip: None,
+            stack: [0.0; STACK_MAX],
+            stack_top: ptr::null_mut(),
         }
     }
-    
+    pub fn init_vm() {
+        Vm::reset_stack();
+    }
+
+    pub fn push(value: Value) {
+        unsafe {
+            *VM.stack_top = value;
+            VM.stack_top = VM.stack_top.add(1);
+        }
+    }
+
+    pub fn pop() -> Value {
+        unsafe {
+            VM.stack_top = VM.stack_top.sub(1);
+            VM.stack_top.read()
+        }
+    }
+
+    pub fn reset_stack() {
+        unsafe {
+            VM.stack_top = VM.stack.as_mut_ptr();
+        }
+    }
     pub fn interpret(chunk: chunk::Chunk) -> Result<()> {
         unsafe {
             let chunk = VM.chunk.insert(chunk.pin());
@@ -25,21 +55,17 @@ impl Vm {
         }
         Self::run()
     }
-    
+
     fn read_byte() -> u8 {
-        let ip = unsafe {VM.ip.as_mut().unwrap()};
+        let ip = unsafe { VM.ip.as_mut().unwrap() };
         ip.next().unwrap()
     }
-    
+
     fn read_constant() -> Value {
         let n = Vm::read_byte();
-        let ip = unsafe {
-            VM.ip.as_mut().unwrap()
-        };
-        
-        unsafe {
-            ip.get_constant(n)
-        }
+        let ip = unsafe { VM.ip.as_mut().unwrap() };
+
+        unsafe { ip.get_constant(n) }
     }
 
     fn disassemble_instruction() {
@@ -47,24 +73,34 @@ impl Vm {
             let ip = VM.ip.as_mut().unwrap();
             ip.disassemble_instruction()
         };
-        
+
         println!("{}", instruction);
     }
-    fn run() -> Result<()>{
+    fn run() -> Result<()> {
         loop {
             let instruction = Vm::read_byte();
 
             #[cfg(feature = "trace_execution")]
-            Vm::disassemble_instruction();
+            {
+                print!("          ");
+                unsafe {
+                    let offset = VM.stack_top.offset_from(VM.stack.as_mut_ptr()) as usize;
+                    for i in &VM.stack[0..offset] {
+                        print!("[ {} ]", i);
+                    }
+                }
+                print!("\n");
+                Vm::disassemble_instruction();
+            }
 
             match instruction.into() {
-                
                 OpCode::Return => {
-                    return Ok(())
+                    println!("{}", Vm::pop());
+                    return Ok(());
                 }
                 OpCode::Constant => {
                     let constant = Vm::read_constant();
-                    println!("{}", constant);
+                    Vm::push(constant);
                 }
             }
         }
@@ -78,7 +114,7 @@ pub enum Error {
     Runtime,
 }
 
-impl fmt::Display for Error{
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
