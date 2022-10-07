@@ -125,7 +125,7 @@ impl Debug for Chunk {
                     ));
                 }
 
-                OpCode::Return => {
+                OpCode::Return | OpCode::Negate => {
                     out.push_str(&format!("{}", OpCode::from(i)));
                 }
             }
@@ -190,7 +190,7 @@ impl Ip {
                 let m = unsafe { self.get_constant(n) };
                 format!("{:04} {} {:<9}{} '{}'", offset, op, " ", n, m)
             }
-            OpCode::Return => format!("{:04} {}", offset, op),
+            OpCode::Return | OpCode::Negate => format!("{:04} {}", offset, op),
         }
     }
 }
@@ -212,6 +212,7 @@ impl Iterator for Ip {
 pub enum OpCode {
     Return,
     Constant,
+    Negate,
 }
 
 impl Display for OpCode {
@@ -222,6 +223,7 @@ impl Display for OpCode {
             match self {
                 Self::Return => "OP_RETURN",
                 Self::Constant => "OP_CONSTANT",
+                Self::Negate => "OP_NEGATE",
             }
         )
     }
@@ -232,6 +234,7 @@ impl From<OpCode> for u8 {
         match code {
             OpCode::Return => 0,
             OpCode::Constant => 1,
+            OpCode::Negate => 2,
         }
     }
 }
@@ -241,6 +244,7 @@ impl From<u8> for OpCode {
         match byte {
             0 => OpCode::Return,
             1 => OpCode::Constant,
+            2 => OpCode::Negate,
             _ => panic!("Unrecongnised OpCode: {}", byte),
         }
     }

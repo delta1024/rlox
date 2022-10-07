@@ -102,6 +102,7 @@ impl Vm {
                     let constant = Vm::read_constant();
                     Vm::push(constant);
                 }
+                OpCode::Negate => Vm::push(-Vm::pop())
             }
         }
     }
