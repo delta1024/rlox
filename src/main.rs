@@ -6,6 +6,7 @@ mod chunk;
 mod vm;
 use chunk::{Chunk, OpCode};
 fn main() {
+    vm::Vm::init_vm();
     let mut chunk = Chunk::new();
 
     let pos = chunk.constant(23.3 as f64);
