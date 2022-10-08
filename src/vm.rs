@@ -1,8 +1,10 @@
+pub use crate::error::VmError as Error;
 use crate::{
     chunk::{self, Ip, OpCode},
+    compiler::compile,
     value::Value,
 };
-use std::{fmt, pin::Pin, ptr, result};
+use std::{pin::Pin, ptr, result};
 
 static mut VM: Vm = Vm::new();
 
@@ -48,12 +50,9 @@ impl Vm {
             VM.stack_top = VM.stack.as_mut_ptr();
         }
     }
-    pub fn interpret(chunk: chunk::Chunk) -> Result<()> {
-        unsafe {
-            let chunk = VM.chunk.insert(chunk.pin());
-            let _ = VM.ip.insert(chunk.as_ref().ip());
-        }
-        Self::run()
+    pub fn interpret(source: &str) -> Result<()> {
+        compile(source)?;
+        Ok(())
     }
 
     fn read_byte() -> u8 {
@@ -76,17 +75,16 @@ impl Vm {
 
         println!("{}", instruction);
     }
-    
+
     fn binary_op(operator: OpCode) -> Result<()> {
         let b = Vm::pop();
         let a = Vm::pop();
-        Vm::push(match  operator { 
+        Vm::push(match operator {
             OpCode::Add => a + b,
             OpCode::Subtract => a - b,
             OpCode::Multiply => a * b,
             OpCode::Divide => a / b,
             _ => unreachable!(),
-
         });
         Ok(())
     }
@@ -117,21 +115,10 @@ impl Vm {
                     Vm::push(constant);
                 }
                 OpCode::Negate => Vm::push(-Vm::pop()),
-                OpCode::Add | OpCode::Subtract | OpCode::Divide | OpCode::Multiply => Vm::binary_op(instruction.into())?,
+                OpCode::Add | OpCode::Subtract | OpCode::Divide | OpCode::Multiply => {
+                    Vm::binary_op(instruction.into())?
+                }
             }
         }
-    }
-}
-
-#[allow(dead_code)]
-#[derive(Debug)]
-pub enum Error {
-    Compile,
-    Runtime,
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
     }
 }

@@ -42,7 +42,7 @@ pub struct Chunk {
     code: Vec<u8>,
     lines: Lines,
     constants: Vec<Value>,
-    _name: [char; 250],
+    pub name: [char; 250],
 }
 
 impl Chunk {
@@ -51,15 +51,24 @@ impl Chunk {
             code: Vec::new(),
             lines: Lines::new(),
             constants: Vec::new(),
-            _name: ['\0'; 250],
+            name: ['\0'; 250],
         }
     }
 
-    pub fn set_name(&mut self, _name: &str) {
-        todo!()
+    pub fn set_name(&mut self, name: &str) {
+        for (i, c) in name.chars().enumerate() {
+            self.name[i] = c;
+        }
     }
-    pub fn name(&self) -> String {
-        String::from("test chunk")
+    pub fn get_name(&self) -> String {
+        let mut string = String::new();
+        for i in &self.name[..] {
+            if *i == '\0' {
+                break;
+            }
+            string.push(*i);
+        }
+        string
     }
     pub fn write<T: Into<u8>>(&mut self, code: T, line: usize) {
         self.code.push(code.into());
@@ -88,7 +97,7 @@ impl Chunk {
 
 impl Debug for Chunk {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut out = format!("== {} ==\n", self.name());
+        let mut out = format!("== {} ==\n\n", self.get_name());
 
         let mut line = 0;
         let mut ip = Ip::new(self).enumerate();
@@ -125,7 +134,12 @@ impl Debug for Chunk {
                     ));
                 }
 
-                OpCode::Return | OpCode::Negate | OpCode::Add | OpCode::Subtract | OpCode::Multiply | OpCode::Divide => {
+                OpCode::Return
+                | OpCode::Negate
+                | OpCode::Add
+                | OpCode::Subtract
+                | OpCode::Multiply
+                | OpCode::Divide => {
                     out.push_str(&format!("{}\n", OpCode::from(i)));
                 }
             }
@@ -140,7 +154,6 @@ impl IntoIterator for &Chunk {
         Ip::new(self)
     }
 }
-
 
 pub struct Ip {
     head: *const u8,
@@ -190,7 +203,12 @@ impl Ip {
                 let m = unsafe { self.get_constant(n) };
                 format!("{:04} {} {:<9}{} '{}'", offset, op, " ", n, m)
             }
-            OpCode::Return | OpCode::Negate | OpCode::Add | OpCode::Subtract | OpCode::Multiply | OpCode::Divide => format!("{:04} {}", offset, op),
+            OpCode::Return
+            | OpCode::Negate
+            | OpCode::Add
+            | OpCode::Subtract
+            | OpCode::Multiply
+            | OpCode::Divide => format!("{:04} {}", offset, op),
         }
     }
 }
