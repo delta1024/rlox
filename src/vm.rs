@@ -50,9 +50,14 @@ impl Vm {
             VM.stack_top = VM.stack.as_mut_ptr();
         }
     }
+
     pub fn interpret(source: &str) -> Result<()> {
-        compile(source)?;
-        Ok(())
+        let chunk = compile(source)?;
+        unsafe {
+            let n = VM.chunk.insert(chunk.pin()).as_ref();
+            let _ = VM.ip.insert(n.ip());
+        }
+        Vm::run()
     }
 
     fn read_byte() -> u8 {

@@ -7,7 +7,7 @@ use crate::value::Value;
 #[derive(Debug)]
 pub struct Lines {
     /// (line number, count)
-    code: Vec<(usize, usize)>,
+    code: Vec<(u32, u32)>,
 }
 
 impl Lines {
@@ -15,7 +15,7 @@ impl Lines {
         Self { code: Vec::new() }
     }
 
-    pub fn add_line(&mut self, new_line: usize) {
+    pub fn add_line(&mut self, new_line: u32) {
         for (line, count) in &mut self.code {
             if *line == new_line {
                 *count += 1;
@@ -26,7 +26,7 @@ impl Lines {
         self.code.push((new_line, 1));
     }
 
-    pub fn get_line(&self, mut pos: usize) -> Option<usize> {
+    pub fn get_line(&self, mut pos: u32) -> Option<u32> {
         for (line, count) in &self.code {
             if pos > *count {
                 pos -= *count;
@@ -42,35 +42,42 @@ pub struct Chunk {
     code: Vec<u8>,
     lines: Lines,
     constants: Vec<Value>,
-    pub name: [char; 250],
+    name: [u8; 250],
 }
-
+const NAME_LEN: usize = 250;
 impl Chunk {
     pub fn new() -> Self {
         Self {
             code: Vec::new(),
             lines: Lines::new(),
             constants: Vec::new(),
-            name: ['\0'; 250],
+            name: ['\0' as u8; NAME_LEN],
         }
     }
 
     pub fn set_name(&mut self, name: &str) {
         for (i, c) in name.chars().enumerate() {
-            self.name[i] = c;
+            self.name[i] = c as u8;
         }
     }
-    pub fn get_name(&self) -> String {
-        let mut string = String::new();
-        for i in &self.name[..] {
-            if *i == '\0' {
-                break;
+    pub fn get_name(&self) -> &str {
+        let mut len = 0;
+        while self.name[len] as char != '\0' {
+            len += 1;
+        }
+
+        let slice = &self.name[..len];
+        std::str::from_utf8(slice).unwrap()
+    }
+    pub fn clear_name(&mut self) {
+        for i in 0..NAME_LEN {
+            if self.name[i] as char == '\0' {
+                return;
             }
-            string.push(*i);
+            self.name[i] = '\0' as u8;
         }
-        string
     }
-    pub fn write<T: Into<u8>>(&mut self, code: T, line: usize) {
+    pub fn write<T: Into<u8>>(&mut self, code: T, line: u32) {
         self.code.push(code.into());
         self.lines.add_line(line);
     }
@@ -103,7 +110,7 @@ impl Debug for Chunk {
         let mut ip = Ip::new(self).enumerate();
         loop {
             let (off, i) = match ip.next() {
-                Some(byte) => byte,
+                Some(byte) => (byte.0 as u32, byte.1),
                 None => break,
             };
             out.push_str(&format!("{:04} ", off));

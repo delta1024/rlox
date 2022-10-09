@@ -1,32 +1,8 @@
 mod value {
     pub type Value = f64;
 }
-mod compiler {
-    pub use crate::error::CompilerError as Error;
-    use crate::scanner::Scanner;
-    use std::result;
-    pub type Result<T> = result::Result<T, Error>;
-
-    pub fn compile(source: &str) -> Result<()> {
-        let mut scanner = Scanner::new(source);
-        let mut line: i32 = -1;
-        {
-            for i in &mut scanner {
-                if i.line != line as u32 {
-                    print!("{:04} ", i.line);
-                    line = i.line as i32;
-                } else {
-                    print!("   | ");
-                }
-                println!("{:?} '{}'", &i.id, i.extract())
-            }
-        }
-
-        Ok(())
-    }
-}
-
 mod chunk;
+mod compiler;
 mod error;
 mod scanner;
 #[allow(dead_code)]
@@ -71,7 +47,7 @@ fn main() -> io::Result<()> {
     } else if argc == 2 {
         run_file(&argv[1])
     } else {
-        eprintln!("Usage: clox [path]");
+        eprintln!("Usage: rlox [path]");
         exit(64);
     }
 }

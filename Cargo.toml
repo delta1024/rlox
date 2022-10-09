@@ -7,6 +7,7 @@ edition = "2021"
 
 [features]
 default = ["debug"]
-debug = ["trace_execution"]
+debug = ["trace_execution", "print_code"]
 trace_execution = []
+print_code = []
 [dependencies]

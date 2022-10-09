@@ -1,4 +1,3 @@
-use crate::chunk::Chunk;
 use std::{marker::PhantomData, slice};
 pub struct Scanner<'a> {
     tail: *const u8,
@@ -6,7 +5,6 @@ pub struct Scanner<'a> {
     current: *const u8,
     line: u32,
     finished: bool,
-    pub chunk: Option<Chunk>,
     _marker: PhantomData<&'a str>,
 }
 
@@ -70,7 +68,6 @@ impl<'a, 'b: 'a> Scanner<'a> {
             start: source.as_ptr(),
             current: source.as_ptr(),
             line: 1,
-            chunk: Some(Chunk::new()),
             finished: false,
             _marker: PhantomData,
         }
@@ -213,6 +210,7 @@ impl<'a, 'b: 'a> Scanner<'a> {
             Token::error("Unterminated string.", self.line)
         } else {
             unsafe {
+                // The closing quote.
                 self.advance();
             }
             self.new_token(TokenType::String)
@@ -242,10 +240,11 @@ impl<'a, 'b: 'a> Scanner<'a> {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Token {
     pub id: TokenType,
-    start: *const u8,
-    length: isize,
+    pub start: *const u8,
+    pub length: isize,
     pub line: u32,
 }
 
@@ -265,7 +264,7 @@ impl Token {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TokenType {
     // Single character tokens.
     LeftParen,
