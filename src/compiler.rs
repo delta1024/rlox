@@ -6,7 +6,7 @@ use crate::{
 };
 use std::{ptr, result};
 pub type Result<T> = result::Result<T, Error>;
-use rule::{Precedence, get_rule};
+use rule::{get_rule, Precedence};
 
 struct Parser<'a, 'b> {
     previous: Token,
@@ -51,7 +51,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         if self.had_error {
             return;
         }
-        print!("[line {}] Error", self.current.line);
+        eprint!("[line {}] Error", self.current.line);
 
         if self.current.id == TokenType::EOF {
             eprint!(" at end");
@@ -69,7 +69,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         if self.had_error {
             return;
         }
-        print!("[line {}] Error", self.previous.line);
+        eprint!("[line {}] Error", self.previous.line);
 
         if self.previous.id == TokenType::EOF {
             eprint!(" at end");
@@ -105,8 +105,8 @@ impl<'a, 'b> Parser<'a, 'b> {
         self.emit_byte(OpCode::Return);
     }
 
-    fn emit_constant(&mut self, value: Value) {
-        let n = self.chunk.constant(value);
+    fn emit_constant<T: Into<Value>>(&mut self, value: T) {
+        let n = self.chunk.constant(value.into());
         self.emit_bytes(OpCode::Constant, n);
     }
 
@@ -140,7 +140,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 }
 
 fn number(parser: &mut Parser) {
-    let value = parser.previous.extract().parse().unwrap();
+    let value = parser.previous.extract().parse::<f64>().unwrap();
     parser.emit_constant(value);
 }
 

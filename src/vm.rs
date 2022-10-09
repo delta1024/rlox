@@ -23,10 +23,11 @@ impl Vm {
         Vm {
             chunk: None,
             ip: None,
-            stack: [0.0; STACK_MAX],
+            stack: [Value::Null; STACK_MAX],
             stack_top: ptr::null_mut(),
         }
     }
+
     pub fn init_vm() {
         Vm::reset_stack();
     }
@@ -44,11 +45,28 @@ impl Vm {
             VM.stack_top.read()
         }
     }
-
+    pub fn peek(distance: isize) -> Value {
+        unsafe { VM.stack_top.offset(-1 - distance).read() }
+    }
     pub fn reset_stack() {
         unsafe {
             VM.stack_top = VM.stack.as_mut_ptr();
         }
+    }
+
+    fn runtime_error(message: &str) -> Result<()> {
+        let mut error = String::new();
+
+        error.push_str(message);
+        unsafe {
+            let ip = VM.ip.as_ref().unwrap();
+            let instruction = ip.offset();
+            let line = ip.get_lines().get_line(instruction).unwrap();
+            let temp = format!("[line {}] in script", line);
+
+            error.push_str(&temp);
+        }
+        Err(Error::Runtime(error))
     }
 
     pub fn interpret(source: &str) -> Result<()> {
@@ -84,6 +102,9 @@ impl Vm {
     fn binary_op(operator: OpCode) -> Result<()> {
         let b = Vm::pop();
         let a = Vm::pop();
+        if f64::try_from(a).is_err() || f64::try_from(b).is_err() {
+            return Vm::runtime_error("Operands must be numbers.");
+        }
         Vm::push(match operator {
             OpCode::Add => a + b,
             OpCode::Subtract => a - b,
@@ -119,7 +140,14 @@ impl Vm {
                     let constant = Vm::read_constant();
                     Vm::push(constant);
                 }
-                OpCode::Negate => Vm::push(-Vm::pop()),
+                OpCode::Negate => {
+                    let n = Vm::peek(0);
+                    if f64::try_from(n).is_err() {
+                        return Vm::runtime_error("Operand must be a number.");
+                    }
+
+                    Vm::push(-Vm::pop());
+                }
                 OpCode::Add | OpCode::Subtract | OpCode::Divide | OpCode::Multiply => {
                     Vm::binary_op(instruction.into())?
                 }

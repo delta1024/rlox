@@ -218,6 +218,9 @@ impl Ip {
             | OpCode::Divide => format!("{:04} {}", offset, op),
         }
     }
+    pub fn offset(&self) -> u32 {
+        unsafe { self.current.offset_from(self.head) as u32 }
+    }
 }
 
 impl Iterator for Ip {

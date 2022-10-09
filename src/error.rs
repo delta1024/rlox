@@ -3,12 +3,19 @@ use std::{error::Error, fmt};
 #[derive(Debug, PartialEq)]
 pub enum VmError {
     Compile,
-    Runtime,
+    Runtime(String),
 }
 
 impl fmt::Display for VmError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Compile => "",
+                Self::Runtime(err) => err,
+            }
+        )
     }
 }
 impl Error for VmError {}
@@ -16,12 +23,22 @@ impl Error for VmError {}
 pub struct CompilerError;
 impl fmt::Display for CompilerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Error during compilation")
+        write!(f, "")
     }
 }
 impl Error for CompilerError {}
 impl From<CompilerError> for VmError {
-    fn from(_: CompilerError) -> Self {
+    fn from(error: CompilerError) -> Self {
         VmError::Compile
     }
 }
+
+#[derive(Debug)]
+pub struct ValueError;
+
+impl fmt::Display for ValueError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Wrong Value type.")
+    }
+}
+impl Error for ValueError {}
