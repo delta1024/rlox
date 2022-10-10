@@ -1,8 +1,9 @@
 pub use crate::error::CompilerError as Error;
 use crate::{
     chunk::{Chunk, OpCode},
+    objects::ObjString,
     scanner::{self, Scanner, Token, TokenType},
-    value::Value, objects::ObjString,
+    value::Value,
 };
 use std::{ptr, result};
 pub type Result<T> = result::Result<T, Error>;
@@ -295,7 +296,7 @@ mod rule {
         // TokenType::EOF         
         ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
     ];
-    use super::{binary, string, grouping, literal, number, unary, Parser};
+    use super::{binary, grouping, literal, number, string, unary, Parser};
     use crate::scanner::TokenType;
     pub(super) type ParseFn = fn(&mut Parser) -> super::Result<()>;
     #[derive(Clone, Copy)]

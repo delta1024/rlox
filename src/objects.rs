@@ -45,7 +45,7 @@ impl ObjString {
             _marker: PhantomPinned,
         })
     }
-    
+
     pub fn concat(a: &str, b: &str) -> Pin<Box<Self>> {
         let mut n = Vec::new();
         for i in a.chars() {
@@ -54,15 +54,15 @@ impl ObjString {
         // Remove the closing quote.
         n.pop();
         let mut b = b.chars();
-        // remove the opening quote 
+        // remove the opening quote
         b.next();
         for i in b {
             n.push(i as u8);
         }
-        Box::pin(
-            ObjString { chars: n, _marker: PhantomPinned }
-        )
-        
+        Box::pin(ObjString {
+            chars: n,
+            _marker: PhantomPinned,
+        })
     }
 }
 

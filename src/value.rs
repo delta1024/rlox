@@ -15,9 +15,7 @@ pub enum Value {
 impl Value {
     pub fn as_obj(&self) -> Result<&dyn Obj, Error> {
         if let Self::Obj(o) = self {
-            unsafe {
-                Ok((*o).as_ref().unwrap())
-            } 
+            unsafe { Ok((*o).as_ref().unwrap()) }
         } else {
             Err(Error)
         }
@@ -30,18 +28,12 @@ impl PartialEq for Value {
             (Self::Null, Self::Null) => true,
             (Self::Bool(lhs), Self::Bool(rhs)) => lhs == rhs,
             (Self::Obj(lhs), Self::Obj(rhs)) => {
-                let lhs = unsafe {
-                    lhs.as_ref().unwrap()
-                };
-                
-                let rhs = unsafe {
-                    rhs.as_ref().unwrap()
-                };
-                
+                let lhs = unsafe { lhs.as_ref().unwrap() };
+
+                let rhs = unsafe { rhs.as_ref().unwrap() };
+
                 match (lhs.id(), rhs.id()) {
-                    (ObjType::String, ObjType::String) => {
-                        lhs.as_string() == rhs.as_string()
-                    }
+                    (ObjType::String, ObjType::String) => lhs.as_string() == rhs.as_string(),
                     (ObjType::None, ObjType::None) => true,
                     _ => false,
                 }
@@ -98,16 +90,6 @@ impl From<bool> for Value {
 impl From<*const dyn Obj> for Value {
     fn from(s: *const dyn Obj) -> Self {
         Self::Obj(s)
-    }
-}
-
-impl TryFrom<Value> for *const dyn Obj {
-    type Error = self::Error;
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::Obj(o) => Ok(o),
-            _ => Err(Error),
-        }
     }
 }
 

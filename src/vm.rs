@@ -2,9 +2,10 @@ pub use crate::error::VmError as Error;
 use crate::{
     chunk::{self, Ip, OpCode},
     compiler::compile,
-    value::Value, objects::{Obj, ObjType, ObjString},
+    objects::{Obj, ObjString, ObjType},
+    value::Value,
 };
-use std::{pin::Pin, ptr, result, collections::LinkedList};
+use std::{collections::LinkedList, pin::Pin, ptr, result};
 
 static mut VM: Vm = Vm::new();
 
@@ -202,12 +203,11 @@ impl Vm {
                         if a == ObjType::String && b == ObjType::String {
                             Vm::concatenate();
                         }
-                    } else if f64::try_from(a).is_ok() && f64::try_from(b).is_ok(){
+                    } else if f64::try_from(a).is_ok() && f64::try_from(b).is_ok() {
                         Vm::binary_op(instruction.into())?;
                     } else {
                         return Vm::runtime_error("Operands must be two strings or two numbers.");
                     }
-
                 }
                 OpCode::Subtract
                 | OpCode::Divide
