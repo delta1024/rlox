@@ -161,6 +161,15 @@ fn binary(parser: &mut Parser) -> Result<()> {
     });
     Ok(())
 }
+fn literal(parser: &mut Parser) -> Result<()> {
+    parser.emit_byte(match parser.previous.id {
+        TokenType::False => OpCode::False,
+        TokenType::Nil => OpCode::Nil,
+        TokenType::True => OpCode::True,
+        _ => unreachable!(),
+    });
+    Ok(())
+}
 fn expression(parser: &mut Parser) -> Result<()> {
     parser.parse_precedence(Precedence::Assignment)
 }
@@ -230,7 +239,7 @@ mod rule {
         // TokenType::Else        
         ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
         // TokenType::False       
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  Some(literal)        , infix: None         , precedence: Precedence::None  },
         // TokenType::For         
         ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
         // TokenType::Fun         
@@ -238,7 +247,7 @@ mod rule {
         // TokenType::If          
         ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
         // TokenType::Nil         
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  Some(literal)        , infix: None         , precedence: Precedence::None  },
         // TokenType::Or          
         ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
         // TokenType::Print       
@@ -250,7 +259,7 @@ mod rule {
         // TokenType::This        
         ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
         // TokenType::True        
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  Some(literal)        , infix: None         , precedence: Precedence::None  },
         // TokenType::Var         
         ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
         // TokenType::While       
@@ -260,7 +269,7 @@ mod rule {
         // TokenType::EOF         
         ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
     ];
-    use super::{binary, grouping, number, unary, Parser};
+    use super::{binary, grouping, literal, number, unary, Parser};
     use crate::scanner::TokenType;
     pub(super) type ParseFn = fn(&mut Parser) -> super::Result<()>;
     #[derive(Clone, Copy)]

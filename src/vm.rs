@@ -32,9 +32,9 @@ impl Vm {
         Vm::reset_stack();
     }
 
-    pub fn push(value: Value) {
+    pub fn push<T: Into<Value>>(value: T) {
         unsafe {
-            *VM.stack_top = value;
+            *VM.stack_top = value.into();
             VM.stack_top = VM.stack_top.add(1);
         }
     }
@@ -140,6 +140,9 @@ impl Vm {
                     let constant = Vm::read_constant();
                     Vm::push(constant);
                 }
+                OpCode::True => Vm::push(true),
+                OpCode::False => Vm::push(false),
+                OpCode::Nil => Vm::push(Value::Null),
                 OpCode::Negate => {
                     let n = Vm::peek(0);
                     if f64::try_from(n).is_err() {

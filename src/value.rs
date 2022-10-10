@@ -7,6 +7,7 @@ pub use crate::error::ValueError as Error;
 #[derive(Debug, Clone, Copy)]
 pub enum Value {
     Number(f64),
+    Bool(bool),
     Null,
 }
 
@@ -27,12 +28,30 @@ impl From<f64> for Value {
     }
 }
 
+impl TryFrom<Value> for bool {
+    type Error = self::Error;
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bool(n) => Ok(n),
+            _ => Err(Error),
+        }
+    }
+}
+
+impl From<bool> for Value {
+    fn from(b: bool) -> Self {
+        Self::Bool(b)
+    }
+}
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut n = String::new();
         match self {
             Self::Number(m) => {
                 n = format!("{}", m);
+            }
+            Self::Bool(s) => {
+                n = format!("{:?}", s);
             }
             Self::Null => n.push_str("null"),
         }
@@ -43,7 +62,10 @@ impl fmt::Display for Value {
 impl Neg for Value {
     type Output = Value;
     fn neg(self) -> Self::Output {
-        Value::Number(-(f64::try_from(self).expect("Value must be a number")))
+        match self {
+            Self::Number(n) => Self::Number(n),
+            _ => unreachable!(),
+        }
     }
 }
 
