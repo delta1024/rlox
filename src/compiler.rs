@@ -1,7 +1,7 @@
 pub use crate::error::CompilerError as Error;
 use crate::{
     chunk::{Chunk, OpCode},
-    objects::ObjString,
+    objects::allocate_string,
     scanner::{self, Scanner, Token, TokenType},
     value::Value,
 };
@@ -131,9 +131,8 @@ fn number(parser: &mut Parser) -> Result<()> {
 }
 
 fn string(parser: &mut Parser) -> Result<()> {
-    let string = ObjString::new(parser.previous.extract());
-    let obj = crate::vm::Vm::allocate_obj(string);
-    parser.emit_constant(obj);
+    let string = allocate_string(parser.previous.extract());
+    parser.emit_constant(string);
     Ok(())
 }
 

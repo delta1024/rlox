@@ -5,9 +5,13 @@ use crate::{
     objects::{Obj, ObjString, ObjType},
     value::Value,
 };
-use std::{collections::LinkedList, pin::Pin, ptr, result};
+use std::{
+    collections::{HashMap, LinkedList},
+    pin::Pin,
+    ptr, result,
+};
 
-static mut VM: Vm = Vm::new();
+pub static mut VM: Vm = Vm::new();
 
 pub type Result<T> = result::Result<T, Error>;
 type Chunk = Pin<Box<chunk::Chunk>>;
@@ -17,7 +21,8 @@ pub struct Vm {
     ip: Option<Ip>,
     stack: [Value; STACK_MAX],
     stack_top: *mut Value,
-    objects: LinkedList<Pin<Box<dyn Obj>>>,
+    _objects: LinkedList<Pin<Box<dyn Obj>>>,
+    pub strings: Option<HashMap<String, Pin<Box<ObjString>>>>,
 }
 
 impl Vm {
@@ -27,12 +32,16 @@ impl Vm {
             ip: None,
             stack: [Value::Null; STACK_MAX],
             stack_top: ptr::null_mut(),
-            objects: LinkedList::new(),
+            _objects: LinkedList::new(),
+            strings: None,
         }
     }
 
     pub fn init_vm() {
         Vm::reset_stack();
+        unsafe {
+            let _ = VM.strings.insert(HashMap::new());
+        }
     }
 
     pub fn push<T: Into<Value>>(value: T) {
@@ -56,10 +65,10 @@ impl Vm {
             VM.stack_top = VM.stack.as_mut_ptr();
         }
     }
-    pub fn allocate_obj(obj: Pin<Box<dyn Obj>>) -> *const dyn Obj {
+    pub fn _allocate_obj(obj: Pin<Box<dyn Obj>>) -> *const dyn Obj {
         unsafe {
-            VM.objects.push_back(obj);
-            let n = VM.objects.back().unwrap().as_ref();
+            VM._objects.push_back(obj);
+            let n = VM._objects.back().unwrap().as_ref();
             let n: *const dyn Obj = Pin::get_ref(n);
             n
         }
@@ -139,7 +148,7 @@ impl Vm {
         let a = Vm::pop();
         let a = a.as_obj().unwrap().as_rstring();
         let c = ObjString::concat(a, b);
-        let c = Vm::allocate_obj(c);
+        let c = crate::objects::allocate_string(c.as_rstring());
         Vm::push(c);
     }
     fn run() -> Result<()> {
