@@ -1,7 +1,4 @@
-use std::{
-    fmt::Debug,
-    pin::Pin,
-};
+use std::{fmt::Debug, marker::PhantomPinned, pin::Pin};
 
 use crate::value::Value;
 #[derive(Debug)]
@@ -44,6 +41,7 @@ pub struct Chunk {
     lines: Lines,
     constants: Vec<Value>,
     name: [u8; NAME_LEN],
+    _marker: PhantomPinned,
 }
 impl Chunk {
     pub fn new() -> Self {
@@ -52,6 +50,7 @@ impl Chunk {
             lines: Lines::new(),
             constants: Vec::new(),
             name: ['\0' as u8; NAME_LEN],
+            _marker: PhantomPinned,
         }
     }
 
@@ -141,15 +140,7 @@ impl Debug for Chunk {
                     ));
                 }
 
-                OpCode::Return
-                | OpCode::Nil
-                | OpCode::True
-                | OpCode::False
-                | OpCode::Negate
-                | OpCode::Add
-                | OpCode::Subtract
-                | OpCode::Multiply
-                | OpCode::Divide => {
+                _ => {
                     out.push_str(&format!("{}\n", OpCode::from(i)));
                 }
             }
@@ -213,15 +204,7 @@ impl Ip {
                 let m = unsafe { self.get_constant(n) };
                 format!("{:04} {} {:<9}{} '{}'", offset, op, " ", n, m)
             }
-            OpCode::Return
-            | OpCode::Nil
-            | OpCode::True
-            | OpCode::False
-            | OpCode::Negate
-            | OpCode::Add
-            | OpCode::Subtract
-            | OpCode::Multiply
-            | OpCode::Divide => format!("{:04} {}", offset, op),
+            _ => format!("{:04} {}", offset, op),
         }
     }
     pub fn offset(&self) -> u32 {
@@ -257,6 +240,10 @@ mod opcode {
         Nil,
         True,
         False,
+        Not,
+        Equal,
+        Greater,
+        Less,
     }
 
     impl Display for OpCode {
@@ -275,6 +262,10 @@ mod opcode {
                     Self::Nil => "NIL",
                     Self::True => "TRUE",
                     Self::False => "False",
+                    Self::Not => "NOT",
+                    Self::Equal => "EQUAL",
+                    Self::Greater => "GREATER",
+                    Self::Less => "LESS",
                 }
             )
         }
@@ -293,6 +284,10 @@ mod opcode {
                 OpCode::Nil => 7,
                 OpCode::True => 8,
                 OpCode::False => 9,
+                OpCode::Not => 10,
+                OpCode::Equal => 11,
+                OpCode::Greater => 12,
+                OpCode::Less => 13,
             }
         }
     }
@@ -310,6 +305,10 @@ mod opcode {
                 7 => OpCode::Nil,
                 8 => OpCode::True,
                 9 => OpCode::False,
+                10 => OpCode::Not,
+                11 => OpCode::Equal,
+                12 => OpCode::Greater,
+                13 => OpCode::Less,
                 _ => panic!("Unrecongnised OpCode: {}", byte),
             }
         }

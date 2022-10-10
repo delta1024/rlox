@@ -141,18 +141,35 @@ fn unary(parser: &mut Parser) -> Result<()> {
     // Compile the operand.
     parser.parse_precedence(Precedence::Uanry)?;
 
-    match op_type {
-        TokenType::Minus => parser.emit_byte(OpCode::Negate),
+    parser.emit_byte(match op_type {
+        TokenType::Minus => OpCode::Negate,
+        TokenType::Bang => OpCode::Not,
         _ => unreachable!(),
-    }
+    });
     Ok(())
 }
+
 fn binary(parser: &mut Parser) -> Result<()> {
     let op_type = parser.previous.id;
     let rule = rule::get_rule(op_type);
     parser.parse_precedence(rule.precedence.add_one())?;
 
     parser.emit_byte(match op_type {
+        TokenType::BangEqual => {
+            parser.emit_bytes(OpCode::Equal, OpCode::Not);
+            return Ok(());
+        }
+        TokenType::EqualEqual => OpCode::Equal,
+        TokenType::Greater => OpCode::Greater,
+        TokenType::GreaterEqual => {
+            parser.emit_bytes(OpCode::Less, OpCode::Not);
+            return Ok(());
+        }
+        TokenType::Less => OpCode::Less,
+        TokenType::LessEqual => {
+            parser.emit_bytes(OpCode::Greater, OpCode::Not);
+            return Ok(());
+        }
         TokenType::Plus => OpCode::Add,
         TokenType::Minus => OpCode::Subtract,
         TokenType::Star => OpCode::Multiply,
@@ -161,6 +178,7 @@ fn binary(parser: &mut Parser) -> Result<()> {
     });
     Ok(())
 }
+
 fn literal(parser: &mut Parser) -> Result<()> {
     parser.emit_byte(match parser.previous.id {
         TokenType::False => OpCode::False,
@@ -170,6 +188,7 @@ fn literal(parser: &mut Parser) -> Result<()> {
     });
     Ok(())
 }
+
 fn expression(parser: &mut Parser) -> Result<()> {
     parser.parse_precedence(Precedence::Assignment)
 }
@@ -189,85 +208,85 @@ mod rule {
     #[rustfmt::skip]
     const RULES: [ParseRule; 40] = [
         // TokenType::LeftParen
-        ParseRule{ prefix: Some(grouping), infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix: Some(grouping) , infix: None         , precedence: Precedence::None  },
         // TokenType::RightParen
-        ParseRule{ prefix: None         , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix: None           , infix: None         , precedence: Precedence::None  },
         // TokenType::LeftBrace
-        ParseRule{ prefix: None         , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix: None           , infix: None         , precedence: Precedence::None  },
         // TokenType::RightBrace
-        ParseRule{ prefix: None         , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix: None           , infix: None         , precedence: Precedence::None  },
         // TokenType::Comma
-        ParseRule{ prefix: None         , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix: None           , infix: None         , precedence: Precedence::None  },
         // TokenType::Dot
-        ParseRule{ prefix: None         , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix: None           , infix: None         , precedence: Precedence::None  },
         // TokenType::Minus
-        ParseRule{ prefix: Some(unary)  , infix: Some(binary) , precedence: Precedence::Term  },
+        ParseRule{ prefix: Some(unary)    , infix: Some(binary) , precedence: Precedence::Term  },
         // TokenType::Plus
-        ParseRule{ prefix: None         , infix: Some(binary) , precedence: Precedence::Term  },
+        ParseRule{ prefix: None           , infix: Some(binary) , precedence: Precedence::Term  },
         // TokenType::Semicolon
-        ParseRule{ prefix: None         , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix: None           , infix: None         , precedence: Precedence::None  },
         // TokenType::Slash
-        ParseRule{ prefix: None         , infix: Some(binary) , precedence: Precedence::Factor},
+        ParseRule{ prefix: None           , infix: Some(binary) , precedence: Precedence::Factor},
         // TokenType::Star
-        ParseRule{ prefix: None         , infix: Some(binary) , precedence: Precedence::Factor},
+        ParseRule{ prefix: None           , infix: Some(binary) , precedence: Precedence::Factor},
         // TokenType::Bang
-        ParseRule{ prefix: None         , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix: Some(unary)    , infix: None         , precedence: Precedence::None  },
         // TokenType::BangEqual
-        ParseRule{ prefix: None         , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix: None           , infix: Some(binary) , precedence: Precedence::Equality  },
         // TokenType::Equal
-        ParseRule{ prefix: None         , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix: None           , infix: None         , precedence: Precedence::None  },
         // TokenType::EqualEqual
-        ParseRule{ prefix: None         , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix: None           , infix: Some(binary) , precedence: Precedence::Equality  },
         // TokenType::Greater
-        ParseRule{ prefix: None         , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix: None           , infix: Some(binary) , precedence: Precedence::Comparison  },
         // TokenType::GreaterEqual
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: Some(binary) , precedence: Precedence::Comparison  },
         // TokenType::Less        
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: Some(binary) , precedence: Precedence::Comparison  },
         // TokenType::LessEqual   
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: Some(binary) , precedence: Precedence::Comparison  },
         // TokenType::Identifier  
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::String      
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::Number      
-        ParseRule{ prefix:  Some(number) , infix: None        , precedence: Precedence::None  },
+        ParseRule{ prefix:  Some(number)  , infix: None         , precedence: Precedence::None  },
         // TokenType::And         
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::Class       
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::Else        
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::False       
-        ParseRule{ prefix:  Some(literal)        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  Some(literal) , infix: None         , precedence: Precedence::None  },
         // TokenType::For         
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::Fun         
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::If          
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::Nil         
-        ParseRule{ prefix:  Some(literal)        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  Some(literal) , infix: None         , precedence: Precedence::None  },
         // TokenType::Or          
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::Print       
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::Return      
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::Super       
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::This        
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::True        
-        ParseRule{ prefix:  Some(literal)        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  Some(literal) , infix: None         , precedence: Precedence::None  },
         // TokenType::Var         
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::While       
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::Error        
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::EOF         
-        ParseRule{ prefix:  None        , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
     ];
     use super::{binary, grouping, literal, number, unary, Parser};
     use crate::scanner::TokenType;

@@ -4,12 +4,23 @@ use std::{
 };
 
 pub use crate::error::ValueError as Error;
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum Value {
     Number(f64),
     Bool(bool),
     Null,
 }
+
+impl Value {
+    pub fn is_falsey(&self) -> bool {
+        match self {
+            Value::Null => true,
+            Value::Bool(b) => !b,
+            _ => false,
+        }
+    }
+}
+impl Eq for Value {}
 
 impl TryFrom<Value> for f64 {
     type Error = crate::value::Error;

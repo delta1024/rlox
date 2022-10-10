@@ -110,6 +110,14 @@ impl Vm {
             OpCode::Subtract => a - b,
             OpCode::Multiply => a * b,
             OpCode::Divide => a / b,
+            OpCode::Greater => {
+                Vm::push(a > b);
+                return Ok(());
+            },
+            OpCode::Less => {
+                Vm::push(a < b);
+                return Ok(());
+            }
             _ => unreachable!(),
         });
         Ok(())
@@ -142,7 +150,16 @@ impl Vm {
                 }
                 OpCode::True => Vm::push(true),
                 OpCode::False => Vm::push(false),
+                OpCode::Equal => {
+                    let b = Vm::pop();
+                    let a = Vm::pop();
+                    Vm::push(a == b);
+                }
                 OpCode::Nil => Vm::push(Value::Null),
+                OpCode::Not => {
+                    let val = Vm::pop();
+                    Vm::push(val.is_falsey());
+                }
                 OpCode::Negate => {
                     let n = Vm::peek(0);
                     if f64::try_from(n).is_err() {
@@ -151,7 +168,7 @@ impl Vm {
 
                     Vm::push(-Vm::pop());
                 }
-                OpCode::Add | OpCode::Subtract | OpCode::Divide | OpCode::Multiply => {
+                OpCode::Add | OpCode::Subtract | OpCode::Divide | OpCode::Multiply | OpCode::Greater | OpCode::Less => {
                     Vm::binary_op(instruction.into())?
                 }
             }

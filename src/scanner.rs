@@ -165,7 +165,7 @@ impl<'a, 'b: 'a> Scanner<'a> {
                     'a' => (2, 3, "lse", TokenType::False),
                     'o' => (2, 1, "r", TokenType::For),
                     'u' => (2, 1, "n", TokenType::Fun),
-                    _ => (0, 0, "", TokenType::Identifier),
+                    _ => return TokenType::Identifier,
                 }
             }
             'i' => (1, 1, "f", TokenType::If),
@@ -178,12 +178,12 @@ impl<'a, 'b: 'a> Scanner<'a> {
                 match unsafe { self.start.add(1).read() as char } {
                     'h' => (2, 2, "is", TokenType::This),
                     'r' => (2, 2, "ue", TokenType::True),
-                    _ => (0, 0, "", TokenType::Identifier),
+                    _ => return TokenType::Identifier,
                 }
             }
             'v' => (1, 2, "ar", TokenType::Var),
             'w' => (1, 4, "hile", TokenType::While),
-            _ => (0, 0, "", TokenType::Identifier),
+            _ => return TokenType::Identifier,
         };
         self.check_keyword(start, length, rest, id)
     }
