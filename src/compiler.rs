@@ -1,7 +1,7 @@
 pub use crate::error::CompilerError as Error;
 use crate::{
     chunk::{Chunk, OpCode},
-    scanner::{Scanner, Token, TokenType},
+    scanner::{self, Scanner, Token, TokenType},
     value::Value,
 };
 use std::{ptr, result};
@@ -18,7 +18,7 @@ struct Parser<'a, 'b> {
 
 impl<'a, 'b> Parser<'a, 'b> {
     fn new(scanner: &'b mut Scanner<'b>, chunk: &'a mut Chunk) -> Parser<'a, 'b> {
-        let null = Token {
+        let null = scanner::Token {
             id: TokenType::Error,
             start: ptr::null(),
             length: 0,
@@ -33,69 +33,53 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn advance(&mut self) {
+    fn advance(&mut self) -> Result<()> {
         self.previous = self.current;
         self.current = match self.scanner.next() {
-            Some(token) => token,
-            None => return,
+            Some(token) => match token {
+                Ok(token) => token,
+                Err(err) => return Parser::error_at(self.current, err.extract()),
+            },
+            None => return Ok(()),
         };
-        if self.current.id != TokenType::Error {
-            return;
-        }
-
-        let n = self.current.extract().to_owned();
-        self.error_at_current(&n);
+        Ok(())
     }
-
-    fn error_at_current(&mut self, message: &str) {
-        if self.had_error {
-            return;
-        }
-        eprint!("[line {}] Error", self.current.line);
-
-        if self.current.id == TokenType::EOF {
-            eprint!(" at end");
-        } else if self.current.id == TokenType::Error {
-            // do nothing
+    fn error_at(token: Token, message: &str) -> Result<()> {
+        let mut error = format!("[line {}] Error", token.line);
+        if token.id == TokenType::EOF {
+            error.push_str(" at end");
         } else {
-            eprint!(" at '{}'", self.current.extract());
+            error.push_str(" at '");
+            error.push_str(token.extract());
+            error.push('\'');
         }
+        error.push_str(": ");
+        error.push_str(message);
 
-        eprintln!(": {}", message);
-        self.had_error = true;
+        Err(Error(error))
     }
 
-    fn error(&mut self, message: &str) {
-        if self.had_error {
-            return;
-        }
-        eprint!("[line {}] Error", self.previous.line);
-
-        if self.previous.id == TokenType::EOF {
-            eprint!(" at end");
-        } else if self.previous.id == TokenType::Error {
-            // do nothing
-        } else {
-            eprint!(" at '{}'", self.previous.extract());
-        }
-
-        eprintln!(": {}", message);
-        self.had_error = true;
+    fn error_at_current(&mut self, message: &str) -> Result<()> {
+        Self::error_at(self.current, message)
     }
 
-    fn consume(&mut self, id: TokenType, message: &str) {
+    fn error(&mut self, message: &str) -> Result<()> {
+        Self::error_at(self.previous, message)
+    }
+
+    fn consume(&mut self, id: TokenType, message: &str) -> Result<()> {
         if self.current.id == id {
-            self.advance();
-            return;
+            self.advance()
+        } else {
+            self.error_at_current(message)
         }
-
-        self.error_at_current(message)
     }
 
     fn emit_byte<T: Into<u8>>(&mut self, byte: T) {
         let line = self.previous.line;
         self.chunk.write(byte, line);
     }
+
     fn emit_bytes<T: Into<U>, U: Into<u8>>(&mut self, byte1: T, byte2: U) {
         self.emit_byte(byte1.into());
         self.emit_byte(byte2);
@@ -119,50 +103,54 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn parse_precedence(&mut self, precedence: Precedence) {
-        self.advance();
+    fn parse_precedence(&mut self, precedence: Precedence) -> Result<()> {
+        self.advance()?;
         let prefix_rule = match get_rule(self.previous.id).prefix {
             Some(rule) => rule,
             None => {
-                self.error("Expected expression.");
-                return;
+                return self.error("Expected expression.");
             }
         };
 
-        prefix_rule(self);
+        prefix_rule(self)?;
 
         while precedence <= get_rule(self.current.id).precedence {
-            self.advance();
+            self.advance()?;
             let infix_rule = get_rule(self.previous.id).infix.unwrap();
-            infix_rule(self);
+            infix_rule(self)?;
         }
+        Ok(())
     }
 }
 
-fn number(parser: &mut Parser) {
+fn number(parser: &mut Parser) -> Result<()> {
     let value = parser.previous.extract().parse::<f64>().unwrap();
     parser.emit_constant(value);
+    Ok(())
 }
 
-fn grouping(parser: &mut Parser) {
-    expression(parser);
-    parser.consume(TokenType::RightParen, "Expect ')' after expression");
+fn grouping(parser: &mut Parser) -> Result<()> {
+    match expression(parser) {
+        _ => parser.consume(TokenType::RightParen, "Expect ')' after expression"),
+    }
 }
-fn unary(parser: &mut Parser) {
+
+fn unary(parser: &mut Parser) -> Result<()> {
     let op_type = parser.previous.id;
 
     // Compile the operand.
-    parser.parse_precedence(Precedence::Uanry);
+    parser.parse_precedence(Precedence::Uanry)?;
 
     match op_type {
         TokenType::Minus => parser.emit_byte(OpCode::Negate),
         _ => unreachable!(),
     }
+    Ok(())
 }
-fn binary(parser: &mut Parser) {
+fn binary(parser: &mut Parser) -> Result<()> {
     let op_type = parser.previous.id;
     let rule = rule::get_rule(op_type);
-    parser.parse_precedence(rule.precedence.add_one());
+    parser.parse_precedence(rule.precedence.add_one())?;
 
     parser.emit_byte(match op_type {
         TokenType::Plus => OpCode::Add,
@@ -171,24 +159,21 @@ fn binary(parser: &mut Parser) {
         TokenType::Slash => OpCode::Divide,
         _ => unreachable!(),
     });
+    Ok(())
 }
-fn expression(parser: &mut Parser) {
-    parser.parse_precedence(Precedence::Assignment);
+fn expression(parser: &mut Parser) -> Result<()> {
+    parser.parse_precedence(Precedence::Assignment)
 }
 
 pub fn compile(source: &str) -> Result<Chunk> {
     let mut chunk = Chunk::new();
     let mut scanner = Scanner::new(source);
     let mut parser = Parser::new(&mut scanner, &mut chunk);
-    parser.advance();
-    expression(&mut parser);
-    parser.consume(TokenType::EOF, "Expect end of expression.");
+    parser.advance()?;
+    expression(&mut parser)?;
+    parser.consume(TokenType::EOF, "Expect end of expression.")?;
     parser.end_compiler();
-    if !parser.had_error {
-        Ok(chunk)
-    } else {
-        Err(Error)
-    }
+    Ok(chunk)
 }
 
 mod rule {
@@ -277,7 +262,7 @@ mod rule {
     ];
     use super::{binary, grouping, number, unary, Parser};
     use crate::scanner::TokenType;
-    pub(super) type ParseFn = fn(&mut Parser);
+    pub(super) type ParseFn = fn(&mut Parser) -> super::Result<()>;
     #[derive(Clone, Copy)]
     pub(super) struct ParseRule {
         pub(super) prefix: Option<ParseFn>,

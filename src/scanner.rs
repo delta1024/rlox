@@ -1,4 +1,6 @@
-use std::{marker::PhantomData, slice};
+pub use crate::error::ScannerError as ErrorToken;
+use std::{marker::PhantomData, result, slice};
+pub type Result<T> = result::Result<T, ErrorToken>;
 pub struct Scanner<'a> {
     tail: *const u8,
     start: *const u8,
@@ -9,7 +11,7 @@ pub struct Scanner<'a> {
 }
 
 impl Iterator for Scanner<'_> {
-    type Item = Token;
+    type Item = Result<Token>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.finished {
             return None;
@@ -19,14 +21,14 @@ impl Iterator for Scanner<'_> {
 
         if self.is_at_end() {
             self.finished = true;
-            return Some(self.new_token(TokenType::EOF));
+            return Some(Ok(self.new_token(TokenType::EOF)));
         }
         let c = unsafe { self.advance() };
         if is_alpha(c) {
-            return self.identifier();
+            return Some(Ok(self.identifier()));
         }
         if c.is_ascii_digit() {
-            return self.number();
+            return Some(Ok(self.number()));
         }
         let id = match c {
             '(' => TokenType::LeftParen,
@@ -48,12 +50,12 @@ impl Iterator for Scanner<'_> {
             '>' => TokenType::Greater,
             '<' if self.matches('=') => TokenType::LessEqual,
             '<' => TokenType::Less,
-            '"' => return self.string(),
+            '"' => return Some(self.string()),
             _ => {
-                return Some(Token::error("Unexpected character.", self.line));
+                return Some(Err(ErrorToken::new("Unexpected character.", self.line)));
             }
         };
-        Some(self.new_token(id))
+        Some(Ok(self.new_token(id)))
     }
 }
 
@@ -186,7 +188,7 @@ impl<'a, 'b: 'a> Scanner<'a> {
         self.check_keyword(start, length, rest, id)
     }
 
-    fn identifier(&mut self) -> Option<Token> {
+    fn identifier(&mut self) -> Token {
         while is_alpha(self.peek()) || self.peek().is_ascii_digit() {
             unsafe {
                 self.advance();
@@ -194,9 +196,10 @@ impl<'a, 'b: 'a> Scanner<'a> {
         }
 
         let id = self.id_type();
-        Some(self.new_token(id))
+        self.new_token(id)
     }
-    fn string(&mut self) -> Option<Token> {
+
+    fn string(&mut self) -> Result<Token> {
         while self.peek() != '"' && !self.is_at_end() {
             if self.peek() == '\n' {
                 self.line += 1;
@@ -206,18 +209,18 @@ impl<'a, 'b: 'a> Scanner<'a> {
             }
         }
 
-        Some(if self.is_at_end() {
-            Token::error("Unterminated string.", self.line)
+        if self.is_at_end() {
+            Err(ErrorToken::new("Unterminated string.", self.line))
         } else {
             unsafe {
                 // The closing quote.
                 self.advance();
             }
-            self.new_token(TokenType::String)
-        })
+            Ok(self.new_token(TokenType::String))
+        }
     }
 
-    fn number(&mut self) -> Option<Token> {
+    fn number(&mut self) -> Token {
         while self.peek().is_ascii_digit() {
             unsafe {
                 self.advance();
@@ -236,7 +239,7 @@ impl<'a, 'b: 'a> Scanner<'a> {
                 }
             }
         }
-        Some(self.new_token(TokenType::Number))
+        self.new_token(TokenType::Number)
     }
 }
 
@@ -253,15 +256,6 @@ impl Token {
         let sli = unsafe { slice::from_raw_parts(self.start, self.length as usize) };
         let str_lis = std::str::from_utf8(sli);
         str_lis.unwrap()
-    }
-
-    fn error(message: &str, line: u32) -> Token {
-        Token {
-            id: TokenType::Error,
-            start: message.as_ptr(),
-            length: message.len() as isize,
-            line,
-        }
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -33,13 +33,12 @@ fn run_file(path: &str) -> io::Result<()> {
     file.read_to_string(&mut file_contents)?;
     match vm::Vm::interpret(&file_contents) {
         Err(err) => {
-            exit(match err {
-                vm::Error::Compile => 65,
-                vm::Error::Runtime(err) => {
-                    eprintln!("{}", err);
-                    70
-                }
-            });
+            let (code, err) = match err {
+                vm::Error::Compile(err) => (65, err),
+                vm::Error::Runtime(err) => (70, err),
+            };
+            eprintln!("{}", err);
+            exit(code);
         }
         Ok(()) => Ok(()),
     }
