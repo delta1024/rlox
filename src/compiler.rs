@@ -2,7 +2,7 @@ pub use crate::error::CompilerError as Error;
 use crate::{
     chunk::{Chunk, OpCode},
     scanner::{self, Scanner, Token, TokenType},
-    value::Value,
+    value::Value, objects::ObjString,
 };
 use std::{ptr, result};
 pub type Result<T> = result::Result<T, Error>;
@@ -129,6 +129,13 @@ fn number(parser: &mut Parser) -> Result<()> {
     Ok(())
 }
 
+fn string(parser: &mut Parser) -> Result<()> {
+    let string = ObjString::new(parser.previous.extract());
+    let obj = crate::vm::Vm::allocate_obj(string);
+    parser.emit_constant(obj);
+    Ok(())
+}
+
 fn grouping(parser: &mut Parser) -> Result<()> {
     match expression(parser) {
         _ => parser.consume(TokenType::RightParen, "Expect ')' after expression"),
@@ -248,7 +255,7 @@ mod rule {
         // TokenType::Identifier  
         ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
         // TokenType::String      
-        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  Some(string)  , infix: None         , precedence: Precedence::None  },
         // TokenType::Number      
         ParseRule{ prefix:  Some(number)  , infix: None         , precedence: Precedence::None  },
         // TokenType::And         
@@ -288,7 +295,7 @@ mod rule {
         // TokenType::EOF         
         ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
     ];
-    use super::{binary, grouping, literal, number, unary, Parser};
+    use super::{binary, string, grouping, literal, number, unary, Parser};
     use crate::scanner::TokenType;
     pub(super) type ParseFn = fn(&mut Parser) -> super::Result<()>;
     #[derive(Clone, Copy)]

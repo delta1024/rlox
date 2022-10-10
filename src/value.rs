@@ -4,11 +4,51 @@ use std::{
 };
 
 pub use crate::error::ValueError as Error;
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+use crate::objects::{Obj, ObjType};
+#[derive(Debug, Clone, Copy, PartialOrd)]
 pub enum Value {
     Number(f64),
     Bool(bool),
+    Obj(*const dyn Obj),
     Null,
+}
+impl Value {
+    pub fn as_obj(&self) -> Result<&dyn Obj, Error> {
+        if let Self::Obj(o) = self {
+            unsafe {
+                Ok((*o).as_ref().unwrap())
+            } 
+        } else {
+            Err(Error)
+        }
+    }
+}
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Number(lhs), Self::Number(rhs)) => lhs == rhs,
+            (Self::Null, Self::Null) => true,
+            (Self::Bool(lhs), Self::Bool(rhs)) => lhs == rhs,
+            (Self::Obj(lhs), Self::Obj(rhs)) => {
+                let lhs = unsafe {
+                    lhs.as_ref().unwrap()
+                };
+                
+                let rhs = unsafe {
+                    rhs.as_ref().unwrap()
+                };
+                
+                match (lhs.id(), rhs.id()) {
+                    (ObjType::String, ObjType::String) => {
+                        lhs.as_string() == rhs.as_string()
+                    }
+                    (ObjType::None, ObjType::None) => true,
+                    _ => false,
+                }
+            }
+            _ => false,
+        }
+    }
 }
 
 impl Value {
@@ -54,6 +94,23 @@ impl From<bool> for Value {
         Self::Bool(b)
     }
 }
+
+impl From<*const dyn Obj> for Value {
+    fn from(s: *const dyn Obj) -> Self {
+        Self::Obj(s)
+    }
+}
+
+impl TryFrom<Value> for *const dyn Obj {
+    type Error = self::Error;
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Obj(o) => Ok(o),
+            _ => Err(Error),
+        }
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut n = String::new();
@@ -63,6 +120,11 @@ impl fmt::Display for Value {
             }
             Self::Bool(s) => {
                 n = format!("{:?}", s);
+            }
+            Self::Obj(ptr) => {
+                let obj = unsafe { ptr.as_ref().unwrap() };
+                let temp = format!("{}", obj);
+                n.push_str(&temp);
             }
             Self::Null => n.push_str("null"),
         }

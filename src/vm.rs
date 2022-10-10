@@ -2,9 +2,9 @@ pub use crate::error::VmError as Error;
 use crate::{
     chunk::{self, Ip, OpCode},
     compiler::compile,
-    value::Value,
+    value::Value, objects::{Obj, ObjType, ObjString},
 };
-use std::{pin::Pin, ptr, result};
+use std::{pin::Pin, ptr, result, collections::LinkedList};
 
 static mut VM: Vm = Vm::new();
 
@@ -16,6 +16,7 @@ pub struct Vm {
     ip: Option<Ip>,
     stack: [Value; STACK_MAX],
     stack_top: *mut Value,
+    objects: LinkedList<Pin<Box<dyn Obj>>>,
 }
 
 impl Vm {
@@ -25,6 +26,7 @@ impl Vm {
             ip: None,
             stack: [Value::Null; STACK_MAX],
             stack_top: ptr::null_mut(),
+            objects: LinkedList::new(),
         }
     }
 
@@ -53,11 +55,19 @@ impl Vm {
             VM.stack_top = VM.stack.as_mut_ptr();
         }
     }
-
+    pub fn allocate_obj(obj: Pin<Box<dyn Obj>>) -> *const dyn Obj {
+        unsafe {
+            VM.objects.push_back(obj);
+            let n = VM.objects.back().unwrap().as_ref();
+            let n: *const dyn Obj = Pin::get_ref(n);
+            n
+        }
+    }
     fn runtime_error(message: &str) -> Result<()> {
         let mut error = String::new();
 
         error.push_str(message);
+        error.push('\n');
         unsafe {
             let ip = VM.ip.as_ref().unwrap();
             let instruction = ip.offset();
@@ -113,7 +123,7 @@ impl Vm {
             OpCode::Greater => {
                 Vm::push(a > b);
                 return Ok(());
-            },
+            }
             OpCode::Less => {
                 Vm::push(a < b);
                 return Ok(());
@@ -121,6 +131,15 @@ impl Vm {
             _ => unreachable!(),
         });
         Ok(())
+    }
+    fn concatenate() {
+        let b = Vm::pop();
+        let b = b.as_obj().unwrap().as_rstring();
+        let a = Vm::pop();
+        let a = a.as_obj().unwrap().as_rstring();
+        let c = ObjString::concat(a, b);
+        let c = Vm::allocate_obj(c);
+        Vm::push(c);
     }
     fn run() -> Result<()> {
         loop {
@@ -168,9 +187,33 @@ impl Vm {
 
                     Vm::push(-Vm::pop());
                 }
-                OpCode::Add | OpCode::Subtract | OpCode::Divide | OpCode::Multiply | OpCode::Greater | OpCode::Less => {
-                    Vm::binary_op(instruction.into())?
+                OpCode::Add => {
+                    let a = Vm::peek(0);
+                    let b = Vm::peek(1);
+                    let is_obj = {
+                        let n = a.as_obj().is_ok();
+                        let m = b.as_obj().is_ok();
+                        (n, m)
+                    };
+
+                    if is_obj.0 == true && is_obj.1 == true {
+                        let a = a.as_obj().unwrap().id();
+                        let b = b.as_obj().unwrap().id();
+                        if a == ObjType::String && b == ObjType::String {
+                            Vm::concatenate();
+                        }
+                    } else if f64::try_from(a).is_ok() && f64::try_from(b).is_ok(){
+                        Vm::binary_op(instruction.into())?;
+                    } else {
+                        return Vm::runtime_error("Operands must be two strings or two numbers.");
+                    }
+
                 }
+                OpCode::Subtract
+                | OpCode::Divide
+                | OpCode::Multiply
+                | OpCode::Greater
+                | OpCode::Less => Vm::binary_op(instruction.into())?,
             }
         }
     }

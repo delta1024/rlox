@@ -1,9 +1,9 @@
 mod chunk;
 mod compiler;
 mod error;
+mod objects;
 mod scanner;
 mod value;
-#[allow(dead_code)]
 mod vm;
 use std::{
     env,
