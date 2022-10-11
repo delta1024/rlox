@@ -129,7 +129,7 @@ impl Debug for Chunk {
             }
 
             match i.into() {
-                OpCode::Constant => {
+                OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::SetGlobal => {
                     let (_, n) = ip.next().unwrap();
                     out.push_str(&format!(
                         "{}{:<10} {} '{}'\n",
@@ -199,7 +199,7 @@ impl Ip {
 
         let op: OpCode = unsafe { self.current.sub(1).read().into() };
         match op {
-            OpCode::Constant => {
+            OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::SetGlobal => {
                 let n = self.peek().unwrap();
                 let m = unsafe { self.get_constant(n) };
                 format!("{:04} {} {:<9}{} '{}'", offset, op, " ", n, m)
@@ -246,6 +246,9 @@ mod opcode {
         Less,
         Print,
         Pop,
+        DefineGlobal,
+        GetGlobal,
+        SetGlobal,
     }
 
     impl Display for OpCode {
@@ -270,6 +273,9 @@ mod opcode {
                     Self::Less => "LESS",
                     Self::Print => "PRINT",
                     Self::Pop => "POP",
+                    Self::DefineGlobal => "DEFINE_GLOBAL",
+                    Self::GetGlobal => "GET_GLOBAL",
+                    Self::SetGlobal => "SET_GLOBAL",
                 }
             )
         }
@@ -294,6 +300,9 @@ mod opcode {
                 OpCode::Less => 13,
                 OpCode::Print => 14,
                 OpCode::Pop => 15,
+                OpCode::DefineGlobal => 16,
+                OpCode::GetGlobal => 17,
+                OpCode::SetGlobal => 18,
             }
         }
     }
@@ -317,6 +326,9 @@ mod opcode {
                 13 => OpCode::Less,
                 14 => OpCode::Print,
                 15 => OpCode::Pop,
+                16 => OpCode::DefineGlobal,
+                17 => OpCode::GetGlobal,
+                18 => OpCode::SetGlobal,
                 _ => panic!("Unrecongnised OpCode: {}", byte),
             }
         }

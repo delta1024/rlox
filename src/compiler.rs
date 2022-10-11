@@ -46,9 +46,6 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(())
     }
     fn error_at(parser: &mut Parser, token: Token, message: &str) -> Result<()> {
-        if let Err(_) = parser.had_error {
-            return Err(Error(String::new()));
-        }
         let mut error = format!("[line {}] Error", token.line);
         if token.id == TokenType::EOF {
             error.push_str(" at end");
@@ -59,8 +56,12 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
         error.push_str(": ");
         error.push_str(message);
-        parser.had_error = Err(Error(error));
-        parser.had_error.clone()
+        if let Err(_) = parser.had_error {
+            Err(Error(error))
+        } else {
+            parser.had_error = Err(Error(error));
+            parser.had_error.clone()
+        }
     }
 
     fn error_at_current(&mut self, message: &str) -> Result<()> {
@@ -150,37 +151,71 @@ impl<'a, 'b> Parser<'a, 'b> {
                 return self.error("Expected expression.");
             }
         };
-
-        prefix_rule(self)?;
+        let can_assign = precedence <= Precedence::Assignment;
+        prefix_rule(self, can_assign)?;
 
         while precedence <= get_rule(self.current.id).precedence {
             self.advance()?;
             let infix_rule = get_rule(self.previous.id).infix.unwrap();
-            infix_rule(self)?;
+            infix_rule(self, can_assign)?;
         }
+        if can_assign && self.matches(TokenType::Equal)? {
+            return self.error("Invalid assignment target.");
+        }
+        Ok(())
+    }
+
+    fn identifier_constant(&mut self, name: Token) -> u8 {
+        let string = allocate_string(name.extract());
+        self.chunk.constant(string.into())
+    }
+
+    fn parse_variable(&mut self, error_message: &str) -> Result<u8> {
+        self.consume(TokenType::Identifier, error_message)?;
+        Ok(self.identifier_constant(self.previous))
+    }
+
+    fn define_variable(&mut self, global: u8) {
+        self.emit_bytes(OpCode::DefineGlobal, global);
+    }
+
+    fn named_variable(&mut self, name: Token, can_assign: bool) -> Result<()> {
+        let arg = self.identifier_constant(name);
+        let n;
+        if can_assign && self.matches(TokenType::Equal).unwrap() {
+            expression(self)?;
+            n = OpCode::SetGlobal;
+        } else {
+            n = OpCode::GetGlobal;
+        }
+        self.emit_bytes(n, arg);
         Ok(())
     }
 }
 
-fn number(parser: &mut Parser) -> Result<()> {
+fn number(parser: &mut Parser, _: bool) -> Result<()> {
     let value = parser.previous.extract().parse::<f64>().unwrap();
     parser.emit_constant(value);
     Ok(())
 }
 
-fn string(parser: &mut Parser) -> Result<()> {
+fn string(parser: &mut Parser, _: bool) -> Result<()> {
     let string = allocate_string(parser.previous.extract());
     parser.emit_constant(string);
     Ok(())
 }
 
-fn grouping(parser: &mut Parser) -> Result<()> {
+fn variable(parser: &mut Parser, can_assign: bool) -> Result<()> {
+    parser.named_variable(parser.previous, can_assign)
+}
+
+fn grouping(parser: &mut Parser, _: bool) -> Result<()> {
     match expression(parser) {
         _ => parser.consume(TokenType::RightParen, "Expect ')' after expression"),
     }
 }
 
-fn unary(parser: &mut Parser) -> Result<()> {
+fn unary(parser: &mut Parser, _: bool) -> Result<()> {
     let op_type = parser.previous.id;
 
     // Compile the operand.
@@ -194,7 +229,7 @@ fn unary(parser: &mut Parser) -> Result<()> {
     Ok(())
 }
 
-fn binary(parser: &mut Parser) -> Result<()> {
+fn binary(parser: &mut Parser, _: bool) -> Result<()> {
     let op_type = parser.previous.id;
     let rule = rule::get_rule(op_type);
     parser.parse_precedence(rule.precedence.add_one())?;
@@ -224,7 +259,7 @@ fn binary(parser: &mut Parser) -> Result<()> {
     Ok(())
 }
 
-fn literal(parser: &mut Parser) -> Result<()> {
+fn literal(parser: &mut Parser, _: bool) -> Result<()> {
     parser.emit_byte(match parser.previous.id {
         TokenType::False => OpCode::False,
         TokenType::Nil => OpCode::Nil,
@@ -236,6 +271,23 @@ fn literal(parser: &mut Parser) -> Result<()> {
 
 fn expression(parser: &mut Parser) -> Result<()> {
     parser.parse_precedence(Precedence::Assignment)
+}
+
+fn var_declaration(parser: &mut Parser) -> Result<()> {
+    let global = parser.parse_variable("Expect variable name.")?;
+
+    if parser.matches(TokenType::Equal)? {
+        expression(parser)?;
+    } else {
+        parser.emit_byte(OpCode::Nil);
+    }
+    parser.consume(
+        TokenType::Semicolon,
+        "Expect ';' after variable declaration.",
+    )?;
+    parser.define_variable(global);
+
+    Ok(())
 }
 
 fn expression_statement(parser: &mut Parser) -> Result<()> {
@@ -253,7 +305,13 @@ fn print_statement(parser: &mut Parser) -> Result<()> {
 }
 
 fn declaration(parser: &mut Parser) {
-    if let Err(err) = statement(parser) {
+    let n;
+    if let Ok(true) = parser.matches(TokenType::Var) {
+        n = var_declaration(parser);
+    } else {
+        n = statement(parser);
+    }
+    if let Err(err) = n {
         eprintln!("{}", err);
         parser.syncronize();
     }
@@ -325,7 +383,7 @@ mod rule {
         // TokenType::LessEqual   
         ParseRule{ prefix:  None          , infix: Some(binary) , precedence: Precedence::Comparison  },
         // TokenType::Identifier  
-        ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
+        ParseRule{ prefix:  Some(variable), infix: None         , precedence: Precedence::None  },
         // TokenType::String      
         ParseRule{ prefix:  Some(string)  , infix: None         , precedence: Precedence::None  },
         // TokenType::Number      
@@ -367,9 +425,9 @@ mod rule {
         // TokenType::EOF         
         ParseRule{ prefix:  None          , infix: None         , precedence: Precedence::None  },
     ];
-    use super::{binary, grouping, literal, number, string, unary, Parser};
+    use super::{binary, grouping, literal, number, string, unary, variable, Parser};
     use crate::scanner::TokenType;
-    pub(super) type ParseFn = fn(&mut Parser) -> super::Result<()>;
+    pub(super) type ParseFn = fn(&mut Parser, bool) -> super::Result<()>;
     #[derive(Clone, Copy)]
     pub(super) struct ParseRule {
         pub(super) prefix: Option<ParseFn>,

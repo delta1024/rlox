@@ -23,6 +23,7 @@ pub struct Vm {
     stack_top: *mut Value,
     _objects: LinkedList<Pin<Box<dyn Obj>>>,
     pub strings: Option<HashMap<String, Pin<Box<ObjString>>>>,
+    pub globals: Option<HashMap<String, Value>>,
 }
 
 impl Vm {
@@ -34,6 +35,7 @@ impl Vm {
             stack_top: ptr::null_mut(),
             _objects: LinkedList::new(),
             strings: None,
+            globals: None,
         }
     }
 
@@ -41,6 +43,7 @@ impl Vm {
         Vm::reset_stack();
         unsafe {
             let _ = VM.strings.insert(HashMap::new());
+            _ = VM.globals.insert(HashMap::new());
         }
     }
 
@@ -109,7 +112,6 @@ impl Vm {
 
         unsafe { ip.get_constant(n) }
     }
-
     fn disassemble_instruction() {
         let instruction = unsafe {
             let ip = VM.ip.as_mut().unwrap();
@@ -221,6 +223,31 @@ impl Vm {
                         Vm::binary_op(instruction.into())?;
                     } else {
                         return Vm::runtime_error("Operands must be two strings or two numbers.");
+                    }
+                }
+                OpCode::DefineGlobal => {
+                    let name = Vm::read_constant();
+                    let name = name.as_obj().unwrap().as_rstring();
+                    let table = unsafe { VM.globals.as_mut().unwrap() };
+                    table.insert(name.to_owned(), Vm::peek(0));
+                    Vm::pop();
+                }
+                OpCode::GetGlobal => {
+                    let name = Vm::read_constant();
+                    let name = name.as_obj().unwrap().as_rstring();
+                    if let Some(value) = unsafe { VM.globals.as_mut().unwrap().get(name) } {
+                        Vm::push(*value);
+                    } else {
+                        return Vm::runtime_error(&format!("Undefine variable '{}'.", name));
+                    }
+                }
+                OpCode::SetGlobal => {
+                    let name = Vm::read_constant();
+                    let name = name.as_obj().unwrap().as_rstring();
+                    let table = unsafe { VM.globals.as_mut().unwrap() };
+                    if let None = table.insert(name.to_owned(), Vm::peek(0)) {
+                        table.remove(name);
+                        return Vm::runtime_error(&format!("Undefined variable '{}'", name));
                     }
                 }
                 OpCode::Subtract
