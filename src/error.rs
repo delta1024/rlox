@@ -18,7 +18,7 @@ impl fmt::Display for VmError {
     }
 }
 impl Error for VmError {}
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CompilerError(pub String);
 impl fmt::Display for CompilerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

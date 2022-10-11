@@ -170,8 +170,10 @@ impl Vm {
 
             match instruction.into() {
                 OpCode::Return => {
-                    println!("{}", Vm::pop());
                     return Ok(());
+                }
+                OpCode::Print => {
+                    println!("{}", Vm::pop());
                 }
                 OpCode::Constant => {
                     let constant = Vm::read_constant();
@@ -179,6 +181,9 @@ impl Vm {
                 }
                 OpCode::True => Vm::push(true),
                 OpCode::False => Vm::push(false),
+                OpCode::Pop => {
+                    Vm::pop();
+                }
                 OpCode::Equal => {
                     let b = Vm::pop();
                     let a = Vm::pop();

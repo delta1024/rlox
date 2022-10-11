@@ -12,7 +12,7 @@ use rule::{get_rule, Precedence};
 struct Parser<'a, 'b> {
     previous: Token,
     current: Token,
-    had_error: bool,
+    had_error: Result<()>,
     chunk: &'a mut Chunk,
     scanner: &'b mut Scanner<'b>,
 }
@@ -29,7 +29,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             previous: null,
             current: null,
             scanner,
-            had_error: false,
+            had_error: Ok(()),
             chunk,
         }
     }
@@ -39,13 +39,16 @@ impl<'a, 'b> Parser<'a, 'b> {
         self.current = match self.scanner.next() {
             Some(token) => match token {
                 Ok(token) => token,
-                Err(err) => return Parser::error_at(self.current, err.extract()),
+                Err(err) => return self.error_at_current(err.extract()),
             },
             None => return Ok(()),
         };
         Ok(())
     }
-    fn error_at(token: Token, message: &str) -> Result<()> {
+    fn error_at(parser: &mut Parser, token: Token, message: &str) -> Result<()> {
+        if let Err(_) = parser.had_error {
+            return Err(Error(String::new()));
+        }
         let mut error = format!("[line {}] Error", token.line);
         if token.id == TokenType::EOF {
             error.push_str(" at end");
@@ -56,16 +59,39 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
         error.push_str(": ");
         error.push_str(message);
-
-        Err(Error(error))
+        parser.had_error = Err(Error(error));
+        parser.had_error.clone()
     }
 
     fn error_at_current(&mut self, message: &str) -> Result<()> {
-        Self::error_at(self.current, message)
+        Self::error_at(self, self.current, message)
     }
 
     fn error(&mut self, message: &str) -> Result<()> {
-        Self::error_at(self.previous, message)
+        Self::error_at(self, self.previous, message)
+    }
+
+    fn syncronize(&mut self) {
+        while self.current.id != TokenType::EOF {
+            if self.previous.id == TokenType::Semicolon {
+                return;
+            }
+            match self.current.id {
+                TokenType::Class
+                | TokenType::Fun
+                | TokenType::Var
+                | TokenType::For
+                | TokenType::If
+                | TokenType::While
+                | TokenType::Print
+                | TokenType::Return => return,
+                _ => {
+                    if let Err(_) = self.advance() {
+                        // Do nothing.
+                    }
+                }
+            }
+        }
     }
 
     fn consume(&mut self, id: TokenType, message: &str) -> Result<()> {
@@ -76,6 +102,18 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
+    fn check(&self, id: TokenType) -> bool {
+        self.current.id == id
+    }
+
+    fn matches(&mut self, id: TokenType) -> Result<bool> {
+        if !self.check(id) {
+            return Ok(false);
+        }
+
+        self.advance()?;
+        Ok(true)
+    }
     fn emit_byte<T: Into<u8>>(&mut self, byte: T) {
         let line = self.previous.line;
         self.chunk.write(byte, line);
@@ -98,7 +136,7 @@ impl<'a, 'b> Parser<'a, 'b> {
     fn end_compiler(&mut self) {
         self.emit_return();
         #[cfg(feature = "print_code")]
-        if !self.had_error {
+        if self.had_error.is_ok() {
             self.chunk.set_name("code");
             println!("{:?}", self.chunk);
         }
@@ -200,15 +238,49 @@ fn expression(parser: &mut Parser) -> Result<()> {
     parser.parse_precedence(Precedence::Assignment)
 }
 
+fn expression_statement(parser: &mut Parser) -> Result<()> {
+    expression(parser)?;
+    parser.consume(TokenType::Semicolon, "Expect ';' after expression.")?;
+    parser.emit_byte(OpCode::Pop);
+    Ok(())
+}
+
+fn print_statement(parser: &mut Parser) -> Result<()> {
+    expression(parser)?;
+    parser.consume(TokenType::Semicolon, "Expect ';' after value.")?;
+    parser.emit_byte(OpCode::Print);
+    Ok(())
+}
+
+fn declaration(parser: &mut Parser) {
+    if let Err(err) = statement(parser) {
+        eprintln!("{}", err);
+        parser.syncronize();
+    }
+}
+
+fn statement(parser: &mut Parser) -> Result<()> {
+    if parser.matches(TokenType::Print)? {
+        print_statement(parser)
+    } else {
+        expression_statement(parser)
+    }
+}
+
 pub fn compile(source: &str) -> Result<Chunk> {
     let mut chunk = Chunk::new();
     let mut scanner = Scanner::new(source);
     let mut parser = Parser::new(&mut scanner, &mut chunk);
     parser.advance()?;
-    expression(&mut parser)?;
-    parser.consume(TokenType::EOF, "Expect end of expression.")?;
+    while !parser.matches(TokenType::EOF)? {
+        declaration(&mut parser);
+    }
     parser.end_compiler();
-    Ok(chunk)
+    if let Err(err) = parser.had_error {
+        Err(err)
+    } else {
+        Ok(chunk)
+    }
 }
 
 mod rule {

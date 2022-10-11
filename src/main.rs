@@ -21,8 +21,8 @@ fn repl() -> io::Result<()> {
             print!("\n");
             exit(0);
         }
-        if let Err(err) = vm::Vm::interpret(&input) {
-            eprintln!("{}", err);
+        if let Err(_) = vm::Vm::interpret(&input) {
+            continue;
         }
     }
 }
@@ -31,17 +31,14 @@ fn run_file(path: &str) -> io::Result<()> {
     let mut file = File::open(path)?;
     let mut file_contents = String::new();
     file.read_to_string(&mut file_contents)?;
-    match vm::Vm::interpret(&file_contents) {
-        Err(err) => {
-            let (code, err) = match err {
-                vm::Error::Compile(err) => (65, err),
-                vm::Error::Runtime(err) => (70, err),
-            };
-            eprintln!("{}", err);
-            exit(code);
-        }
-        Ok(()) => Ok(()),
+    if let Err(err) = vm::Vm::interpret(&file_contents) {
+        let code = match err {
+            vm::Error::Compile(_) => 65,
+            vm::Error::Runtime(_) => 70,
+        };
+        exit(code);
     }
+    Ok(())
 }
 fn main() -> io::Result<()> {
     vm::Vm::init_vm();

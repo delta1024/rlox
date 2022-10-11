@@ -244,6 +244,8 @@ mod opcode {
         Equal,
         Greater,
         Less,
+        Print,
+        Pop,
     }
 
     impl Display for OpCode {
@@ -266,6 +268,8 @@ mod opcode {
                     Self::Equal => "EQUAL",
                     Self::Greater => "GREATER",
                     Self::Less => "LESS",
+                    Self::Print => "PRINT",
+                    Self::Pop => "POP",
                 }
             )
         }
@@ -288,6 +292,8 @@ mod opcode {
                 OpCode::Equal => 11,
                 OpCode::Greater => 12,
                 OpCode::Less => 13,
+                OpCode::Print => 14,
+                OpCode::Pop => 15,
             }
         }
     }
@@ -309,6 +315,8 @@ mod opcode {
                 11 => OpCode::Equal,
                 12 => OpCode::Greater,
                 13 => OpCode::Less,
+                14 => OpCode::Print,
+                15 => OpCode::Pop,
                 _ => panic!("Unrecongnised OpCode: {}", byte),
             }
         }
