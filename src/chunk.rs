@@ -139,7 +139,10 @@ impl Debug for Chunk {
                         unsafe { Ip::new(self).get_constant(n) }
                     ));
                 }
-
+                OpCode::SetLocal | OpCode::GetLocal => {
+                    let (_, slot) = ip.next().unwrap();
+                    out.push_str(&format!("{} {:<8} {}\n", OpCode::from(i), " ", slot));
+                }
                 _ => {
                     out.push_str(&format!("{}\n", OpCode::from(i)));
                 }
@@ -204,6 +207,10 @@ impl Ip {
                 let m = unsafe { self.get_constant(n) };
                 format!("{:04} {} {:<9}{} '{}'", offset, op, " ", n, m)
             }
+            OpCode::GetLocal | OpCode::SetLocal => {
+                let slot = self.peek().unwrap();
+                format! {"{:04} {} {:<7} {}", offset, op, " ", slot}
+            }
             _ => format!("{:04} {}", offset, op),
         }
     }
@@ -249,6 +256,8 @@ mod opcode {
         DefineGlobal,
         GetGlobal,
         SetGlobal,
+        GetLocal,
+        SetLocal,
     }
 
     impl Display for OpCode {
@@ -276,6 +285,8 @@ mod opcode {
                     Self::DefineGlobal => "DEFINE_GLOBAL",
                     Self::GetGlobal => "GET_GLOBAL",
                     Self::SetGlobal => "SET_GLOBAL",
+                    Self::GetLocal => "GET_LOCAL",
+                    Self::SetLocal => "SET_LOCAL",
                 }
             )
         }
@@ -303,6 +314,8 @@ mod opcode {
                 OpCode::DefineGlobal => 16,
                 OpCode::GetGlobal => 17,
                 OpCode::SetGlobal => 18,
+                OpCode::GetLocal => 19,
+                OpCode::SetLocal => 20,
             }
         }
     }
@@ -329,6 +342,8 @@ mod opcode {
                 16 => OpCode::DefineGlobal,
                 17 => OpCode::GetGlobal,
                 18 => OpCode::SetGlobal,
+                19 => OpCode::GetLocal,
+                20 => OpCode::SetLocal,
                 _ => panic!("Unrecongnised OpCode: {}", byte),
             }
         }

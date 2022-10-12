@@ -91,7 +91,7 @@ impl<'a, 'b: 'a> Scanner<'a> {
     }
 
     fn peek_next(&self) -> char {
-        if !self.is_at_end() {
+        if self.is_at_end() {
             '\0'
         } else {
             unsafe { self.current.add(1).read() as char }

@@ -19,19 +19,37 @@ impl fmt::Display for VmError {
 }
 impl Error for VmError {}
 #[derive(Debug, Clone)]
+pub struct ParserError(pub String);
+impl fmt::Display for ParserError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+impl Error for ParserError {}
+impl From<ParserError> for VmError {
+    fn from(err: ParserError) -> Self {
+        VmError::Compile(err.0)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct CompilerError(pub String);
+impl CompilerError {
+    pub fn new(message: &str) -> Self {
+        Self(String::from(message))
+    }
+}
 impl fmt::Display for CompilerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 impl Error for CompilerError {}
-impl From<CompilerError> for VmError {
-    fn from(err: CompilerError) -> Self {
-        VmError::Compile(err.0)
+impl From<CompilerError> for ParserError {
+    fn from(s: CompilerError) -> Self {
+        Self(s.0)
     }
 }
-
 #[derive(Debug, Clone, Copy)]
 pub struct ScannerError {
     pub start: *const u8,
@@ -53,7 +71,7 @@ impl ScannerError {
         str_lis.unwrap()
     }
 }
-impl From<ScannerError> for CompilerError {
+impl From<ScannerError> for ParserError {
     fn from(s: ScannerError) -> Self {
         Self(String::from(s.extract()))
     }

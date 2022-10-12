@@ -250,6 +250,18 @@ impl Vm {
                         return Vm::runtime_error(&format!("Undefined variable '{}'", name));
                     }
                 }
+                OpCode::GetLocal => {
+                    let slot = Vm::read_byte() as usize;
+                    let val = unsafe { VM.stack[slot] };
+                    Vm::push(val);
+                }
+                OpCode::SetLocal => {
+                    let slot = Vm::read_byte() as usize;
+                    let val = Vm::peek(0);
+                    unsafe {
+                        VM.stack[slot] = val;
+                    }
+                }
                 OpCode::Subtract
                 | OpCode::Divide
                 | OpCode::Multiply
