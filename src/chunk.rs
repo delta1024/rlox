@@ -37,7 +37,7 @@ impl Lines {
 
 const NAME_LEN: usize = 250;
 pub struct Chunk {
-    code: Vec<u8>,
+    pub code: Vec<u8>,
     lines: Lines,
     constants: Vec<Value>,
     name: [u8; NAME_LEN],
@@ -103,15 +103,15 @@ impl Chunk {
 
 impl Debug for Chunk {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut out = format!("== {} ==\n\n", self.get_name());
+        let mut out = format!("== {} ==\n", self.get_name());
 
         let mut line = 0;
-        let mut ip = Ip::new(self).enumerate();
+        let mut ip = Ip::new(self);
         loop {
-            let (off, i) = match ip.next() {
-                Some(byte) => (byte.0 as u32, byte.1),
-                None => break,
-            };
+            let off = ip.offset();
+            if let None = ip.next() {
+                break;
+            }
             out.push_str(&format!("{:04} ", off));
             {
                 let last_line = if off != 0 {
@@ -127,26 +127,9 @@ impl Debug for Chunk {
                     out.push_str("   | ");
                 }
             }
+            out.push_str(&ip.disassemble_instruction());
+            out.push('\n');
 
-            match i.into() {
-                OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::SetGlobal => {
-                    let (_, n) = ip.next().unwrap();
-                    out.push_str(&format!(
-                        "{}{:<10} {} '{}'\n",
-                        OpCode::from(i),
-                        " ",
-                        n,
-                        unsafe { Ip::new(self).get_constant(n) }
-                    ));
-                }
-                OpCode::SetLocal | OpCode::GetLocal => {
-                    let (_, slot) = ip.next().unwrap();
-                    out.push_str(&format!("{} {:<8} {}\n", OpCode::from(i), " ", slot));
-                }
-                _ => {
-                    out.push_str(&format!("{}\n", OpCode::from(i)));
-                }
-            }
         }
         write!(f, "{}", out)
     }
@@ -158,11 +141,11 @@ impl IntoIterator for &Chunk {
         Ip::new(self)
     }
 }
-
+/// An abstraction over all unsafe code related to a Chunk
 pub struct Ip {
     head: *const u8,
     tail: *const u8,
-    current: *const u8,
+    pub current: *const u8,
     lines: *const Lines,
     constants: *const Value,
 }
@@ -205,17 +188,53 @@ impl Ip {
             OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::SetGlobal => {
                 let n = self.peek().unwrap();
                 let m = unsafe { self.get_constant(n) };
-                format!("{:04} {} {:<9}{} '{}'", offset, op, " ", n, m)
+                format!("{} {:<9}{} '{}'", op, " ", n, m)
+            }
+            OpCode::Jump | OpCode::JumpIfFalse => {
+                let mut jump = unsafe { (self.current.read() as u16) << 8 };
+                jump |= unsafe { self.current.add(1).read() as u16 };
+                format!(
+                    "{} {} {:04} -> {}",
+                    op,
+                    match op {
+                        OpCode::JumpIfFalse => format! {"{:<2} ", " "},
+                        OpCode::Jump => format!("{:<11} ", " "),
+                        _ => unreachable!(),
+                    },
+                    offset,
+                    (offset + 3 + (1 * jump) as isize)
+                )
+            }
+            OpCode::Loop => {
+                let mut jump = unsafe { (self.current.read() as u16) << 8 };
+                jump |= unsafe { self.current.add(1).read() as u16 };
+                format!(
+                    "{} {:<11} {:04} -> {}",
+                    op,
+                    " ",
+                    offset,
+                    (offset + 3 + (-1 * jump as isize) as isize)
+                )
             }
             OpCode::GetLocal | OpCode::SetLocal => {
                 let slot = self.peek().unwrap();
-                format! {"{:04} {} {:<7} {}", offset, op, " ", slot}
+                format! {"{} {:<5} {}", op, " ", slot}
             }
-            _ => format!("{:04} {}", offset, op),
+            _ => format!("{}", op),
         }
     }
     pub fn offset(&self) -> u32 {
         unsafe { self.current.offset_from(self.head) as u32 }
+    }
+
+    pub fn jump_forward(&mut self, span: usize) {
+        self.current = unsafe { self.current.add(span) };
+    }
+    pub fn jump_back(&mut self, span: usize) {
+        self.current = unsafe { self.current.sub(span) };
+    }
+    pub fn short_bytes(&mut self) -> (u8, u8) {
+        unsafe { (self.current.sub(2).read(), self.current.sub(1).read()) }
     }
 }
 
@@ -258,6 +277,9 @@ mod opcode {
         SetGlobal,
         GetLocal,
         SetLocal,
+        JumpIfFalse,
+        Jump,
+        Loop,
     }
 
     impl Display for OpCode {
@@ -287,6 +309,9 @@ mod opcode {
                     Self::SetGlobal => "SET_GLOBAL",
                     Self::GetLocal => "GET_LOCAL",
                     Self::SetLocal => "SET_LOCAL",
+                    Self::JumpIfFalse => "JUMP_IF_FALSE",
+                    Self::Jump => "JUMP",
+                    Self::Loop => "LOOP",
                 }
             )
         }
@@ -316,6 +341,9 @@ mod opcode {
                 OpCode::SetGlobal => 18,
                 OpCode::GetLocal => 19,
                 OpCode::SetLocal => 20,
+                OpCode::JumpIfFalse => 21,
+                OpCode::Jump => 22,
+                OpCode::Loop => 23,
             }
         }
     }
@@ -344,6 +372,9 @@ mod opcode {
                 18 => OpCode::SetGlobal,
                 19 => OpCode::GetLocal,
                 20 => OpCode::SetLocal,
+                21 => OpCode::JumpIfFalse,
+                22 => OpCode::Jump,
+                23 => OpCode::Loop,
                 _ => panic!("Unrecongnised OpCode: {}", byte),
             }
         }

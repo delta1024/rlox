@@ -112,6 +112,16 @@ impl Vm {
 
         unsafe { ip.get_constant(n) }
     }
+
+    fn read_short() -> usize {
+        let ip = unsafe { VM.ip.as_mut().unwrap() };
+        ip.next();
+        ip.next();
+        let (a, b) = ip.short_bytes();
+        let (a, b) = (a as u16, b as u16);
+        let n = (a << 8) | b;
+        n as usize
+    }
     fn disassemble_instruction() {
         let instruction = unsafe {
             let ip = VM.ip.as_mut().unwrap();
@@ -260,6 +270,26 @@ impl Vm {
                     let val = Vm::peek(0);
                     unsafe {
                         VM.stack[slot] = val;
+                    }
+                }
+                OpCode::Jump => {
+                    let offset = Vm::read_short();
+                    unsafe {
+                        VM.ip.as_mut().unwrap().jump_forward(offset);
+                    }
+                }
+                OpCode::JumpIfFalse => {
+                    let offset = Vm::read_short();
+                    if Vm::peek(0).is_falsey() {
+                        unsafe {
+                            VM.ip.as_mut().unwrap().jump_forward(offset);
+                        }
+                    }
+                }
+                OpCode::Loop => {
+                    let offset = Vm::read_short();
+                    unsafe {
+                        VM.ip.as_mut().unwrap().jump_back(offset);
                     }
                 }
                 OpCode::Subtract

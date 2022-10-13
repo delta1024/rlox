@@ -50,6 +50,11 @@ impl From<CompilerError> for ParserError {
         Self(s.0)
     }
 }
+impl From<CompilerError> for String {
+    fn from(s: CompilerError) -> Self {
+        s.0
+    }
+}
 #[derive(Debug, Clone, Copy)]
 pub struct ScannerError {
     pub start: *const u8,
