@@ -100,7 +100,7 @@ impl Chunk {
         }
     }
 }
-
+#[cfg(feature = "debug")]
 impl Debug for Chunk {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut out = format!("== {} ==\n", self.get_name());
@@ -180,6 +180,7 @@ impl Ip {
 
         unsafe { Some(self.current.read()) }
     }
+    #[cfg(feature = "debug")]
     pub fn disassemble_instruction(&self) -> String {
         let offset = unsafe { self.current.offset_from(self.head) };
 

@@ -122,6 +122,7 @@ impl Vm {
         let n = (a << 8) | b;
         n as usize
     }
+    #[cfg(feature = "trace_execution")]
     fn disassemble_instruction() {
         let instruction = unsafe {
             let ip = VM.ip.as_mut().unwrap();

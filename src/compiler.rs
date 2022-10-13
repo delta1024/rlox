@@ -178,7 +178,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         if self.current.id == id {
             self.advance()
         } else {
-            self.error_at_current(message)
+            self.error(message)
         }
     }
 
