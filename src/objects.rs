@@ -1,12 +1,12 @@
 use std::{
     fmt::{Debug, Display},
-    marker::PhantomPinned,
     pin::Pin,
 };
-pub trait Obj: Debug + Display {
-    fn id(&self) -> ObjType {
-        ObjType::None
-    }
+
+use crate::{chunk::Chunk, vm::Vm};
+
+pub trait Obj: Debug + Display + Unpin {
+    fn id(&self) -> ObjType;
 
     fn as_string(&self) -> Option<&ObjString> {
         None
@@ -15,17 +15,54 @@ pub trait Obj: Debug + Display {
     fn as_rstring(&self) -> &str {
         ""
     }
+
+    fn as_function(&mut self) -> Option<&mut ObjFunction> {
+        None
+    }
 }
 
 #[derive(PartialEq)]
 pub enum ObjType {
+    Function,
     String,
     None,
+}
+#[derive(Debug)]
+pub struct ObjFunction {
+    arity: u32,
+    pub chunk: Chunk,
+    pub name: *const ObjString,
+}
+impl ObjFunction {
+    pub fn new() -> *mut ObjFunction {
+        let function = ObjFunction {
+            arity: 0,
+            chunk: Chunk::new(),
+            name: std::ptr::null_mut(),
+        };
+        let n = Vm::allocate_obj(Box::pin(function));
+        unsafe { n.as_mut().unwrap().as_function().unwrap() }
+    }
+}
+impl Display for ObjFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // let name = unsafe { self.name.as_ref().unwrap() };
+        let name = self.chunk.get_name();
+        write!(f, "<fn {}>", name /*.as_rstring()*/)
+    }
+}
+impl Obj for ObjFunction {
+    fn id(&self) -> ObjType {
+        ObjType::Function
+    }
+
+    fn as_function(&mut self) -> Option<&mut ObjFunction> {
+        Some(self)
+    }
 }
 #[derive(Debug, Eq, Hash, PartialOrd, Ord)]
 pub struct ObjString {
     chars: Vec<u8>,
-    _marker: PhantomPinned,
 }
 
 impl PartialEq for ObjString {
@@ -42,7 +79,6 @@ impl ObjString {
                 v.push(c as u8);
                 v
             }),
-            _marker: PhantomPinned,
         })
     }
 
@@ -59,10 +95,7 @@ impl ObjString {
         for i in b {
             n.push(i as u8);
         }
-        ObjString {
-            chars: n,
-            _marker: PhantomPinned,
-        }
+        ObjString { chars: n }
     }
 }
 

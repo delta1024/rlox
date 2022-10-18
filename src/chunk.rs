@@ -1,4 +1,4 @@
-use std::{fmt::Debug, marker::PhantomPinned, pin::Pin};
+use std::{fmt::Debug, marker::PhantomPinned, pin::Pin, ptr};
 
 use crate::value::Value;
 #[derive(Debug)]
@@ -41,7 +41,6 @@ pub struct Chunk {
     lines: Lines,
     constants: Vec<Value>,
     name: [u8; NAME_LEN],
-    _marker: PhantomPinned,
 }
 impl Chunk {
     pub fn new() -> Self {
@@ -50,7 +49,6 @@ impl Chunk {
             lines: Lines::new(),
             constants: Vec::new(),
             name: ['\0' as u8; NAME_LEN],
-            _marker: PhantomPinned,
         }
     }
 
@@ -70,10 +68,10 @@ impl Chunk {
     }
     pub fn clear_name(&mut self) {
         for i in 0..NAME_LEN {
-            if self.name[i] as char == '\0' {
+            if self.name[i] == b'\0' {
                 return;
             }
-            self.name[i] = '\0' as u8;
+            self.name[i] = b'\0';
         }
     }
     pub fn write<T: Into<u8>>(&mut self, code: T, line: u32) {
@@ -90,7 +88,7 @@ impl Chunk {
         Box::pin(self)
     }
 
-    pub fn ip(self: Pin<&Self>) -> Ip {
+    pub fn ip(&self) -> Ip {
         Ip {
             head: self.code.as_ptr(),
             tail: unsafe { self.code.as_ptr().add(self.code.len()) },
@@ -109,7 +107,7 @@ impl Debug for Chunk {
         let mut ip = Ip::new(self);
         loop {
             let off = ip.offset();
-            if let None = ip.next() {
+            if ip.next().is_none() {
                 break;
             }
             out.push_str(&format!("{:04} ", off));
@@ -127,9 +125,12 @@ impl Debug for Chunk {
                     out.push_str("   | ");
                 }
             }
-            out.push_str(&ip.disassemble_instruction());
+            let (instruction, skip) = ip.disassemble_instruction();
+            for _ in 0..skip {
+                ip.next();
+            }
+            out.push_str(&instruction);
             out.push('\n');
-
         }
         write!(f, "{}", out)
     }
@@ -141,6 +142,7 @@ impl IntoIterator for &Chunk {
         Ip::new(self)
     }
 }
+#[derive(Clone, Copy)]
 /// An abstraction over all unsafe code related to a Chunk
 pub struct Ip {
     head: *const u8,
@@ -158,6 +160,15 @@ impl Ip {
             current: chunk.code.as_ptr(),
             lines: &chunk.lines,
             constants: chunk.constants.as_ptr(),
+        }
+    }
+    pub const fn null() -> Self {
+        Self {
+            head: ptr::null(),
+            tail: ptr::null(),
+            current: ptr::null(),
+            lines: ptr::null(),
+            constants: ptr::null(),
         }
     }
     pub unsafe fn get_constant(&self, pos: u8) -> Value {
@@ -181,7 +192,7 @@ impl Ip {
         unsafe { Some(self.current.read()) }
     }
     #[cfg(feature = "debug")]
-    pub fn disassemble_instruction(&self) -> String {
+    pub fn disassemble_instruction(&self) -> (String, usize) {
         let offset = unsafe { self.current.offset_from(self.head) };
 
         let op: OpCode = unsafe { self.current.sub(1).read().into() };
@@ -189,39 +200,45 @@ impl Ip {
             OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::SetGlobal => {
                 let n = self.peek().unwrap();
                 let m = unsafe { self.get_constant(n) };
-                format!("{} {:<9}{} '{}'", op, " ", n, m)
+                (format!("{} {:<9}{} '{}'", op, " ", n, m), 1)
             }
             OpCode::Jump | OpCode::JumpIfFalse => {
                 let mut jump = unsafe { (self.current.read() as u16) << 8 };
                 jump |= unsafe { self.current.add(1).read() as u16 };
-                format!(
-                    "{} {} {:04} -> {}",
-                    op,
-                    match op {
-                        OpCode::JumpIfFalse => format! {"{:<2} ", " "},
-                        OpCode::Jump => format!("{:<11} ", " "),
-                        _ => unreachable!(),
-                    },
-                    offset,
-                    (offset + 3 + (1 * jump) as isize)
+                (
+                    format!(
+                        "{} {} {:04} -> {}",
+                        op,
+                        match op {
+                            OpCode::JumpIfFalse => format! {"{:<2} ", " "},
+                            OpCode::Jump => format!("{:<11} ", " "),
+                            _ => unreachable!(),
+                        },
+                        offset,
+                        (offset + 3 + (1 * jump) as isize)
+                    ),
+                    2,
                 )
             }
             OpCode::Loop => {
                 let mut jump = unsafe { (self.current.read() as u16) << 8 };
                 jump |= unsafe { self.current.add(1).read() as u16 };
-                format!(
-                    "{} {:<11} {:04} -> {}",
-                    op,
-                    " ",
-                    offset,
-                    (offset + 3 + (-1 * jump as isize) as isize)
+                (
+                    format!(
+                        "{} {:<11} {:04} -> {}",
+                        op,
+                        " ",
+                        offset,
+                        (offset + 3 + (-1 * jump as isize) as isize)
+                    ),
+                    2,
                 )
             }
             OpCode::GetLocal | OpCode::SetLocal => {
                 let slot = self.peek().unwrap();
-                format! {"{} {:<5} {}", op, " ", slot}
+                (format! {"{} {:<5} {}", op, " ", slot}, 1)
             }
-            _ => format!("{}", op),
+            _ => (format!("{}", op), 0),
         }
     }
     pub fn offset(&self) -> u32 {

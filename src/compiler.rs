@@ -2,7 +2,7 @@ pub use crate::error::ParserError as Error;
 use crate::{
     chunk::{Chunk, OpCode},
     error::CompilerError,
-    objects::allocate_string,
+    objects::{allocate_string, Obj, ObjFunction},
     scanner::{self, Scanner, Token, TokenType},
     value::Value,
 };
@@ -13,19 +13,34 @@ use std::{
 pub type Result<T> = result::Result<T, Error>;
 use rule::{get_rule, Precedence};
 const U8_MAX: usize = u8::MAX as usize;
+enum FunctionType {
+    Function,
+    Script,
+}
 struct Compiler {
+    function: *mut ObjFunction,
+    id: FunctionType,
     locals: [Local; U8_MAX],
     local_count: usize,
     scope_depth: isize,
 }
 
 impl Compiler {
-    fn new() -> Compiler {
-        Compiler {
+    fn new(id: FunctionType) -> Compiler {
+        let m = ObjFunction::new();
+        let mut n = Compiler {
+            function: m,
+            id,
             locals: [Local::null(); U8_MAX],
             local_count: 0,
             scope_depth: 0,
-        }
+        };
+        let local = &mut n.locals[n.local_count];
+        n.local_count += 1;
+        local.depth = 0;
+        local.name = Token::null();
+
+        n
     }
 
     fn add_local(&mut self, name: Token) -> StdResult<(), CompilerError> {
@@ -109,7 +124,8 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
     fn current_chunk(&mut self) -> &mut Chunk {
-        self.chunk
+        let function = unsafe { self.compiler.function.as_mut().unwrap() };
+        &mut function.chunk
     }
     fn advance(&mut self) -> Result<()> {
         self.previous = self.current;
@@ -232,7 +248,6 @@ impl<'a, 'b> Parser<'a, 'b> {
         self.current_chunk().code[offset as usize] = ((jump >> 8) & 0xff) as u8;
         self.current_chunk().code[offset + 1] = (jump & 0xff) as u8;
 
-
         Ok(())
     }
 
@@ -245,13 +260,20 @@ impl<'a, 'b> Parser<'a, 'b> {
         self.emit_bytes(OpCode::Constant, n);
     }
 
-    fn end_compiler(&mut self) {
+    fn end_compiler(&mut self) -> *mut ObjFunction {
         self.emit_return();
+        let function = unsafe { self.compiler.function.as_ref().unwrap() };
+        if function.name.is_null() {
+            self.current_chunk().set_name("script");
+        } else {
+            let name = unsafe { function.name.as_ref().unwrap() };
+            self.current_chunk().set_name(name.as_rstring());
+        }
         #[cfg(feature = "print_code")]
         if self.had_error.is_ok() {
-            self.current_chunk().set_name("code");
             println!("{:?}", self.current_chunk());
         }
+        self.compiler.function
     }
 
     fn begin_scope(&mut self) {
@@ -610,20 +632,20 @@ mod compiler_functions {
     }
 }
 
-pub fn compile(source: &str) -> Result<Chunk> {
+pub fn compile(source: &str) -> Result<*mut ObjFunction> {
     let mut chunk = Chunk::new();
-    let mut compiler = Compiler::new();
+    let mut compiler = Compiler::new(FunctionType::Script);
     let mut scanner = Scanner::new(source);
     let mut parser = Parser::new(&mut scanner, &mut chunk, &mut compiler);
     parser.advance()?;
     while !parser.matches(TokenType::EOF)? {
         declaration(&mut parser);
     }
-    parser.end_compiler();
+    let n = parser.end_compiler();
     if let Err(err) = parser.had_error {
         Err(err)
     } else {
-        Ok(chunk)
+        Ok(n)
     }
 }
 

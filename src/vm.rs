@@ -2,7 +2,7 @@ pub use crate::error::VmError as Error;
 use crate::{
     chunk::{self, Ip, OpCode},
     compiler::compile,
-    objects::{Obj, ObjString, ObjType},
+    objects::{Obj, ObjFunction, ObjString, ObjType},
     value::Value,
 };
 use std::{
@@ -15,10 +15,27 @@ pub static mut VM: Vm = Vm::new();
 
 pub type Result<T> = result::Result<T, Error>;
 type Chunk = Pin<Box<chunk::Chunk>>;
-const STACK_MAX: usize = 256;
+const FRAMES_MAX: usize = 64;
+const STACK_MAX: usize = FRAMES_MAX * u8::MAX as usize;
+
+#[derive(Clone, Copy)]
+struct CallFrame {
+    function: *const ObjFunction,
+    ip: Ip,
+    slots: *mut Value,
+}
+impl CallFrame {
+    const fn new() -> CallFrame {
+        CallFrame {
+            function: ptr::null(),
+            ip: Ip::null(),
+            slots: ptr::null_mut(),
+        }
+    }
+}
 pub struct Vm {
-    chunk: Option<Chunk>,
-    ip: Option<Ip>,
+    frames: [CallFrame; FRAMES_MAX],
+    frame_count: usize,
     stack: [Value; STACK_MAX],
     stack_top: *mut Value,
     _objects: LinkedList<Pin<Box<dyn Obj>>>,
@@ -29,8 +46,8 @@ pub struct Vm {
 impl Vm {
     const fn new() -> Vm {
         Vm {
-            chunk: None,
-            ip: None,
+            frames: [CallFrame::new(); FRAMES_MAX],
+            frame_count: 0,
             stack: [Value::Null; STACK_MAX],
             stack_top: ptr::null_mut(),
             _objects: LinkedList::new(),
@@ -66,13 +83,14 @@ impl Vm {
     pub fn reset_stack() {
         unsafe {
             VM.stack_top = VM.stack.as_mut_ptr();
+            VM.frame_count = 0;
         }
     }
-    pub fn _allocate_obj(obj: Pin<Box<dyn Obj>>) -> *const dyn Obj {
+    pub fn allocate_obj(obj: Pin<Box<dyn Obj>>) -> *mut dyn Obj {
         unsafe {
             VM._objects.push_back(obj);
-            let n = VM._objects.back().unwrap().as_ref();
-            let n: *const dyn Obj = Pin::get_ref(n);
+            let n = VM._objects.back_mut().unwrap().as_mut();
+            let n: *mut dyn Obj = Pin::get_mut(n);
             n
         }
     }
@@ -82,7 +100,9 @@ impl Vm {
         error.push_str(message);
         error.push('\n');
         unsafe {
-            let ip = VM.ip.as_ref().unwrap();
+            let frame = &VM.frames[VM.frame_count - 1];
+
+            let ip = frame.ip;
             let instruction = ip.offset();
             let line = ip.get_lines().get_line(instruction).unwrap();
             let temp = format!("[line {}] in script", line);
@@ -93,28 +113,38 @@ impl Vm {
     }
 
     pub fn interpret(source: &str) -> Result<()> {
-        let chunk = compile(source)?;
+        let function = compile(source)?;
         unsafe {
-            let n = VM.chunk.insert(chunk.pin()).as_ref();
-            let _ = VM.ip.insert(n.ip());
+            let function: *const dyn Obj = function;
+            Vm::push(function);
         }
+        let frame = unsafe {
+            VM.frame_count += 1;
+            &mut VM.frames[VM.frame_count - 1]
+        };
+        frame.function = function;
+        frame.ip = unsafe {
+            let function = function.as_ref().unwrap();
+            function.chunk.ip()
+        };
+        frame.slots = unsafe { &mut VM.stack[0] };
         Vm::run()
     }
 
-    fn read_byte() -> u8 {
-        let ip = unsafe { VM.ip.as_mut().unwrap() };
+    fn read_byte(frame: *mut CallFrame) -> u8 {
+        let ip = unsafe { &mut frame.as_mut().unwrap().ip };
         ip.next().unwrap()
     }
 
-    fn read_constant() -> Value {
-        let n = Vm::read_byte();
-        let ip = unsafe { VM.ip.as_mut().unwrap() };
+    fn read_constant(frame: *mut CallFrame) -> Value {
+        let n = Vm::read_byte(frame);
+        let ip = unsafe { frame.as_mut().unwrap().ip };
 
         unsafe { ip.get_constant(n) }
     }
 
-    fn read_short() -> usize {
-        let ip = unsafe { VM.ip.as_mut().unwrap() };
+    fn read_short(frame: *mut CallFrame) -> usize {
+        let ip = unsafe { &mut frame.as_mut().unwrap().ip };
         ip.next();
         ip.next();
         let (a, b) = ip.short_bytes();
@@ -123,13 +153,13 @@ impl Vm {
         n as usize
     }
     #[cfg(feature = "trace_execution")]
-    fn disassemble_instruction() {
+    fn disassemble_instruction(frame: *const CallFrame) {
         let instruction = unsafe {
-            let ip = VM.ip.as_mut().unwrap();
+            let ip = frame.as_ref().unwrap().ip;
             ip.disassemble_instruction()
         };
 
-        println!("{}", instruction);
+        println!("{}", instruction.0);
     }
 
     fn binary_op(operator: OpCode) -> Result<()> {
@@ -165,8 +195,9 @@ impl Vm {
         Vm::push(c);
     }
     fn run() -> Result<()> {
+        let frame: *mut CallFrame = unsafe { &mut VM.frames[VM.frame_count - 1] };
         loop {
-            let instruction = Vm::read_byte();
+            let instruction = Vm::read_byte(frame);
 
             #[cfg(feature = "trace_execution")]
             {
@@ -178,18 +209,19 @@ impl Vm {
                     }
                 }
                 print!("\n");
-                Vm::disassemble_instruction();
+                Vm::disassemble_instruction(frame);
             }
 
             match instruction.into() {
                 OpCode::Return => {
+                    Vm::pop();
                     return Ok(());
                 }
                 OpCode::Print => {
                     println!("{}", Vm::pop());
                 }
                 OpCode::Constant => {
-                    let constant = Vm::read_constant();
+                    let constant = Vm::read_constant(frame);
                     Vm::push(constant);
                 }
                 OpCode::True => Vm::push(true),
@@ -237,14 +269,14 @@ impl Vm {
                     }
                 }
                 OpCode::DefineGlobal => {
-                    let name = Vm::read_constant();
+                    let name = Vm::read_constant(frame);
                     let name = name.as_obj().unwrap().as_rstring();
                     let table = unsafe { VM.globals.as_mut().unwrap() };
                     table.insert(name.to_owned(), Vm::peek(0));
                     Vm::pop();
                 }
                 OpCode::GetGlobal => {
-                    let name = Vm::read_constant();
+                    let name = Vm::read_constant(frame);
                     let name = name.as_obj().unwrap().as_rstring();
                     if let Some(value) = unsafe { VM.globals.as_mut().unwrap().get(name) } {
                         Vm::push(*value);
@@ -253,7 +285,7 @@ impl Vm {
                     }
                 }
                 OpCode::SetGlobal => {
-                    let name = Vm::read_constant();
+                    let name = Vm::read_constant(frame);
                     let name = name.as_obj().unwrap().as_rstring();
                     let table = unsafe { VM.globals.as_mut().unwrap() };
                     if let None = table.insert(name.to_owned(), Vm::peek(0)) {
@@ -262,35 +294,40 @@ impl Vm {
                     }
                 }
                 OpCode::GetLocal => {
-                    let slot = Vm::read_byte() as usize;
-                    let val = unsafe { VM.stack[slot] };
+                    let slot = Vm::read_byte(frame) as usize;
+                    let frame = unsafe { frame.as_mut().unwrap() };
+                    let val = unsafe { frame.slots.add(slot).read() };
                     Vm::push(val);
                 }
                 OpCode::SetLocal => {
-                    let slot = Vm::read_byte() as usize;
+                    let slot = Vm::read_byte(frame) as usize;
                     let val = Vm::peek(0);
                     unsafe {
-                        VM.stack[slot] = val;
+                        let frame = frame.as_mut().unwrap();
+                        frame.slots.add(slot).write(val);
                     }
                 }
                 OpCode::Jump => {
-                    let offset = Vm::read_short();
+                    let offset = Vm::read_short(frame);
                     unsafe {
-                        VM.ip.as_mut().unwrap().jump_forward(offset);
+                        let frame = frame.as_mut().unwrap();
+                        frame.ip.jump_forward(offset);
                     }
                 }
                 OpCode::JumpIfFalse => {
-                    let offset = Vm::read_short();
+                    let offset = Vm::read_short(frame);
                     if Vm::peek(0).is_falsey() {
                         unsafe {
-                            VM.ip.as_mut().unwrap().jump_forward(offset);
+                            let frame = frame.as_mut().unwrap();
+                            frame.ip.jump_forward(offset);
                         }
                     }
                 }
                 OpCode::Loop => {
-                    let offset = Vm::read_short();
+                    let offset = Vm::read_short(frame);
                     unsafe {
-                        VM.ip.as_mut().unwrap().jump_back(offset);
+                        let frame = frame.as_mut().unwrap();
+                        frame.ip.jump_back(offset);
                     }
                 }
                 OpCode::Subtract
