@@ -7,13 +7,9 @@ use crate::{chunk::Chunk, vm::Vm};
 
 pub trait Obj: Debug + Display + Unpin {
     fn id(&self) -> ObjType;
-
+    fn as_rstring(&self) -> &str;
     fn as_string(&self) -> Option<&ObjString> {
         None
-    }
-
-    fn as_rstring(&self) -> &str {
-        ""
     }
 
     fn as_function(&mut self) -> Option<&mut ObjFunction> {
@@ -29,16 +25,16 @@ pub enum ObjType {
 }
 #[derive(Debug)]
 pub struct ObjFunction {
-    arity: u32,
+    pub arity: u32,
     pub chunk: Chunk,
     pub name: *const ObjString,
 }
 impl ObjFunction {
-    pub fn new() -> *mut ObjFunction {
+    pub fn new(name: *const ObjString) -> *mut ObjFunction {
         let function = ObjFunction {
             arity: 0,
             chunk: Chunk::new(),
-            name: std::ptr::null_mut(),
+            name,
         };
         let n = Vm::allocate_obj(Box::pin(function));
         unsafe { n.as_mut().unwrap().as_function().unwrap() }
@@ -46,9 +42,7 @@ impl ObjFunction {
 }
 impl Display for ObjFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // let name = unsafe { self.name.as_ref().unwrap() };
-        let name = self.chunk.get_name();
-        write!(f, "<fn {}>", name /*.as_rstring()*/)
+        write!(f, "<fn {}>", self.as_rstring() /*.as_rstring()*/)
     }
 }
 impl Obj for ObjFunction {
@@ -58,6 +52,13 @@ impl Obj for ObjFunction {
 
     fn as_function(&mut self) -> Option<&mut ObjFunction> {
         Some(self)
+    }
+
+    fn as_rstring(&self) -> &str {
+        match unsafe { self.name.as_ref() } {
+            Some(s) => s.as_rstring(),
+            None => "script",
+        }
     }
 }
 #[derive(Debug, Eq, Hash, PartialOrd, Ord)]

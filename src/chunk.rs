@@ -1,4 +1,4 @@
-use std::{fmt::Debug, marker::PhantomPinned, pin::Pin, ptr};
+use std::{fmt::Debug, pin::Pin, ptr};
 
 use crate::value::Value;
 #[derive(Debug)]

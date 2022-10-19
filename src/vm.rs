@@ -1,6 +1,6 @@
 pub use crate::error::VmError as Error;
 use crate::{
-    chunk::{self, Ip, OpCode},
+    chunk::{Ip, OpCode},
     compiler::compile,
     objects::{Obj, ObjFunction, ObjString, ObjType},
     value::Value,
@@ -14,7 +14,6 @@ use std::{
 pub static mut VM: Vm = Vm::new();
 
 pub type Result<T> = result::Result<T, Error>;
-type Chunk = Pin<Box<chunk::Chunk>>;
 const FRAMES_MAX: usize = 64;
 const STACK_MAX: usize = FRAMES_MAX * u8::MAX as usize;
 
@@ -114,7 +113,7 @@ impl Vm {
 
     pub fn interpret(source: &str) -> Result<()> {
         let function = compile(source)?;
-        unsafe {
+        {
             let function: *const dyn Obj = function;
             Vm::push(function);
         }
