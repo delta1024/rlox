@@ -12,7 +12,11 @@ pub trait Obj: Debug + Display + Unpin {
         None
     }
 
-    fn as_function(&mut self) -> Option<&mut ObjFunction> {
+    fn as_function_mut(&mut self) -> Option<&mut ObjFunction> {
+        None
+    }
+
+    fn as_function(&self) -> Option<&ObjFunction> {
         None
     }
 }
@@ -37,7 +41,7 @@ impl ObjFunction {
             name,
         };
         let n = Vm::allocate_obj(Box::pin(function));
-        unsafe { n.as_mut().unwrap().as_function().unwrap() }
+        unsafe { n.as_mut().unwrap().as_function_mut().unwrap() }
     }
 }
 impl Display for ObjFunction {
@@ -50,10 +54,13 @@ impl Obj for ObjFunction {
         ObjType::Function
     }
 
-    fn as_function(&mut self) -> Option<&mut ObjFunction> {
+    fn as_function_mut(&mut self) -> Option<&mut ObjFunction> {
         Some(self)
     }
 
+    fn as_function(&self) -> Option<&ObjFunction> {
+        Some(self)
+    }
     fn as_rstring(&self) -> &str {
         match unsafe { self.name.as_ref() } {
             Some(s) => s.as_rstring(),

@@ -234,7 +234,7 @@ impl Ip {
                     2,
                 )
             }
-            OpCode::GetLocal | OpCode::SetLocal => {
+            OpCode::GetLocal | OpCode::SetLocal | OpCode::Call => {
                 let slot = self.peek().unwrap();
                 (format! {"{} {:<5} {}", op, " ", slot}, 1)
             }
@@ -298,6 +298,7 @@ mod opcode {
         JumpIfFalse,
         Jump,
         Loop,
+        Call,
     }
 
     impl Display for OpCode {
@@ -330,6 +331,7 @@ mod opcode {
                     Self::JumpIfFalse => "JUMP_IF_FALSE",
                     Self::Jump => "JUMP",
                     Self::Loop => "LOOP",
+                    OpCode::Call => "CALL",
                 }
             )
         }
@@ -362,6 +364,7 @@ mod opcode {
                 OpCode::JumpIfFalse => 21,
                 OpCode::Jump => 22,
                 OpCode::Loop => 23,
+                OpCode::Call => 24,
             }
         }
     }
@@ -393,6 +396,7 @@ mod opcode {
                 21 => OpCode::JumpIfFalse,
                 22 => OpCode::Jump,
                 23 => OpCode::Loop,
+                24 => OpCode::Call,
                 _ => panic!("Unrecongnised OpCode: {}", byte),
             }
         }

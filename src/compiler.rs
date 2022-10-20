@@ -263,6 +263,7 @@ impl<'b> Parser<'b> {
     }
 
     fn emit_return(&mut self) {
+        self.emit_byte(OpCode::Nil);
         self.emit_byte(OpCode::Return);
     }
 
@@ -374,6 +375,24 @@ impl<'b> Parser<'b> {
             return;
         }
         self.emit_bytes(OpCode::DefineGlobal, global);
+    }
+
+    fn argument_list(&mut self) -> Result<u8> {
+        let mut arg_count = 0;
+        if !self.check(TokenType::RightParen) {
+            loop {
+                expression(self)?;
+                if arg_count == 255 {
+                    self.error("Can't have more than 255 arguments.")?;
+                }
+                arg_count += 1;
+                if !self.matches(TokenType::Comma)? {
+                    break;
+                }
+            }
+        }
+        self.consume(TokenType::RightParen, "Expect ')' after arguments.")?;
+        Ok(arg_count)
     }
 
     fn named_variable(&mut self, name: Token, can_assign: bool) -> Result<()> {
@@ -489,6 +508,12 @@ mod compiler_functions {
             TokenType::Slash => OpCode::Divide,
             _ => unreachable!(),
         });
+        Ok(())
+    }
+
+    pub(super) fn call(parser: &mut Parser, _: bool) -> Result<()> {
+        let arg_count = parser.argument_list()?;
+        parser.emit_bytes(OpCode::Call, arg_count);
         Ok(())
     }
 
@@ -642,7 +667,20 @@ mod compiler_functions {
         parser.emit_byte(OpCode::Print);
         Ok(())
     }
-
+    pub(super) fn return_statement(parser: &mut Parser) -> Result<()> {
+        if parser.compiler().id == FunctionType::Script {
+            parser.error("Can't return from top-level code.")?;
+        }
+        if parser.matches(TokenType::Semicolon)? {
+            parser.emit_return();
+            Ok(())
+        } else {
+            expression(parser)?;
+            parser.consume(TokenType::Semicolon, "Expect ';' after return value.")?;
+            parser.emit_byte(OpCode::Return);
+            Ok(())
+        }
+    }
     pub(super) fn while_statement(parser: &mut Parser) -> Result<()> {
         let loop_start = parser.current_chunk().code.len();
         parser.consume(TokenType::LeftParen, "Expect '(' after'while'.")?;
@@ -678,6 +716,8 @@ mod compiler_functions {
             for_statement(parser)
         } else if parser.matches(TokenType::If)? {
             if_statement(parser)
+        } else if parser.matches(TokenType::Return)? {
+            return_statement(parser)
         } else if parser.matches(TokenType::While)? {
             while_statement(parser)
         } else if parser.matches(TokenType::LeftBrace)? {
@@ -711,7 +751,7 @@ mod rule {
     #[rustfmt::skip]
     const RULES: [ParseRule; 40] = [
         // TokenType::LeftParen
-        ParseRule{ prefix: Some(grouping) , infix: None         , precedence: Precedence::None       },
+        ParseRule{ prefix: Some(grouping) , infix: Some(call)   , precedence: Precedence::Call       },
         // TokenType::RightParen
         ParseRule{ prefix: None           , infix: None         , precedence: Precedence::None       },
         // TokenType::LeftBrace
@@ -791,7 +831,9 @@ mod rule {
         // TokenType::EOF        
         ParseRule{ prefix: None           , infix: None         , precedence: Precedence::None       },
     ];
-    use super::{binary, grouping, literal, number, r#and, r#or, string, unary, variable, Parser};
+    use super::{
+        binary, call, grouping, literal, number, r#and, r#or, string, unary, variable, Parser,
+    };
     use crate::scanner::TokenType;
     pub(super) type ParseFn = fn(&mut Parser, bool) -> super::Result<()>;
     #[derive(Clone, Copy)]

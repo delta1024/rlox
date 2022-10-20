@@ -79,6 +79,37 @@ impl Vm {
     pub fn peek(distance: isize) -> Value {
         unsafe { VM.stack_top.offset(-1 - distance).read() }
     }
+    fn call(function: *const ObjFunction, arg_count: u32) -> Result<()> {
+        if arg_count != unsafe { function.as_ref().unwrap().arity } {
+            Vm::runtime_error(&format!(
+                "Expected {} arguments but got {}",
+                unsafe { function.as_ref().unwrap().arity },
+                arg_count
+            ))?;
+        }
+
+        if unsafe { VM.frame_count == FRAMES_MAX } {
+            Vm::runtime_error("Stack overflow.")?;
+        }
+        let frame = unsafe { &mut VM.frames[VM.frame_count] };
+        unsafe {
+            VM.frame_count += 1;
+        }
+        frame.function = function;
+        frame.ip = unsafe { function.as_ref().unwrap().chunk.ip() };
+        frame.slots = unsafe { VM.stack_top.sub(arg_count as usize).sub(1) };
+
+        Ok(())
+    }
+    pub fn call_value(callee: Value, arg_count: u32) -> Result<()> {
+        match callee.as_obj() {
+            Ok(obj) => match obj.as_function() {
+                Some(fun) => Vm::call(fun, arg_count),
+                None => unreachable!(),
+            },
+            Err(_) => Vm::runtime_error("Can only call functions and classes."),
+        }
+    }
     pub fn reset_stack() {
         unsafe {
             VM.stack_top = VM.stack.as_mut_ptr();
@@ -93,40 +124,39 @@ impl Vm {
             n
         }
     }
+
     fn runtime_error(message: &str) -> Result<()> {
         let mut error = String::new();
 
         error.push_str(message);
         error.push('\n');
+
         unsafe {
-            let frame = &VM.frames[VM.frame_count - 1];
-
-            let ip = frame.ip;
-            let instruction = ip.offset();
-            let line = ip.get_lines().get_line(instruction).unwrap();
-            let temp = format!("[line {}] in script", line);
-
-            error.push_str(&temp);
+            for i in (0..=(VM.frame_count - 1)).rev() {
+                let frame = &VM.frames[i];
+                let function = frame.function;
+                let function = function.as_ref().unwrap();
+                let instruction = frame.ip.offset() - 1;
+                error.push_str(&format!(
+                    "[line {}] in ",
+                    frame.ip.get_lines().get_line(instruction).unwrap()
+                ));
+                if function.name.is_null() {
+                    error.push_str("script\n");
+                } else {
+                    error.push_str(&format!("{}()\n", function.as_rstring()));
+                }
+            }
         }
+        eprintln!("{}", error);
+        Vm::reset_stack();
         Err(Error::Runtime(error))
     }
 
     pub fn interpret(source: &str) -> Result<()> {
         let function = compile(source)?;
-        {
-            let function: *const dyn Obj = function;
-            Vm::push(function);
-        }
-        let frame = unsafe {
-            VM.frame_count += 1;
-            &mut VM.frames[VM.frame_count - 1]
-        };
-        frame.function = function;
-        frame.ip = unsafe {
-            let function = function.as_ref().unwrap();
-            function.chunk.ip()
-        };
-        frame.slots = unsafe { &mut VM.stack[0] };
+        Vm::push(function as *const dyn Obj);
+        Vm::call(function, 0)?;
         Vm::run()
     }
 
@@ -194,7 +224,7 @@ impl Vm {
         Vm::push(c);
     }
     fn run() -> Result<()> {
-        let frame: *mut CallFrame = unsafe { &mut VM.frames[VM.frame_count - 1] };
+        let mut frame: *mut CallFrame = unsafe { &mut VM.frames[VM.frame_count - 1] };
         loop {
             let instruction = Vm::read_byte(frame);
 
@@ -212,9 +242,26 @@ impl Vm {
             }
 
             match instruction.into() {
+                OpCode::Call => {
+                    let arg_count = Vm::read_byte(frame);
+                    let p_val = Vm::peek(arg_count as isize);
+                    Vm::call_value(p_val, arg_count as u32)?;
+                    frame = unsafe { &mut VM.frames[VM.frame_count - 1] };
+                    continue;
+                }
                 OpCode::Return => {
-                    Vm::pop();
-                    return Ok(());
+                    let result = Vm::pop();
+                    unsafe {
+                        VM.frame_count -= 1;
+                        if VM.frame_count == 0 {
+                            Vm::pop();
+                            return Ok(());
+                        }
+                        let this_frame = frame.as_ref().unwrap();
+                        VM.stack_top = this_frame.slots;
+                        Vm::push(result);
+                        frame = &mut VM.frames[VM.frame_count - 1];
+                    }
                 }
                 OpCode::Print => {
                     println!("{}", Vm::pop());
