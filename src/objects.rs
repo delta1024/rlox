@@ -3,12 +3,16 @@ use std::{
     pin::Pin,
 };
 
-use crate::{chunk::Chunk, vm::Vm};
+use crate::{chunk::Chunk, value::Value, vm::Vm};
 
 pub trait Obj: Debug + Display + Unpin {
     fn id(&self) -> ObjType;
     fn as_rstring(&self) -> &str;
     fn as_string(&self) -> Option<&ObjString> {
+        None
+    }
+
+    fn as_native(&self) -> Option<&ObjNative> {
         None
     }
 
@@ -24,6 +28,7 @@ pub trait Obj: Debug + Display + Unpin {
 #[derive(PartialEq)]
 pub enum ObjType {
     Function,
+    Native,
     String,
     None,
 }
@@ -66,6 +71,38 @@ impl Obj for ObjFunction {
             Some(s) => s.as_rstring(),
             None => "script",
         }
+    }
+}
+pub type NativeFn = fn(args: &[Value]) -> Value;
+pub struct ObjNative {
+    pub function: NativeFn,
+}
+
+impl ObjNative {
+    pub fn new(function: NativeFn) -> *const dyn Obj {
+        let native = Box::pin(Self { function });
+        Vm::allocate_obj(native)
+    }
+}
+impl Debug for ObjNative {
+    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        unimplemented!()
+    }
+}
+impl Display for ObjNative {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<native fn>")
+    }
+}
+impl Obj for ObjNative {
+    fn id(&self) -> ObjType {
+        ObjType::Native
+    }
+    fn as_rstring(&self) -> &str {
+        unimplemented!()
+    }
+    fn as_native(&self) -> Option<&ObjNative> {
+        Some(self)
     }
 }
 #[derive(Debug, Eq, Hash, PartialOrd, Ord)]

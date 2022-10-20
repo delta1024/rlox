@@ -2,17 +2,24 @@ pub use crate::error::VmError as Error;
 use crate::{
     chunk::{Ip, OpCode},
     compiler::compile,
-    objects::{Obj, ObjFunction, ObjString, ObjType},
+    objects::{allocate_string, NativeFn, Obj, ObjFunction, ObjNative, ObjString, ObjType},
     value::Value,
 };
 use std::{
     collections::{HashMap, LinkedList},
     pin::Pin,
     ptr, result,
+    time::{Duration, SystemTime},
 };
 
 pub static mut VM: Vm = Vm::new();
-
+fn clock_native(_: &[Value]) -> Value {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64()
+        .into()
+}
 pub type Result<T> = result::Result<T, Error>;
 const FRAMES_MAX: usize = 64;
 const STACK_MAX: usize = FRAMES_MAX * u8::MAX as usize;
@@ -61,6 +68,7 @@ impl Vm {
             let _ = VM.strings.insert(HashMap::new());
             _ = VM.globals.insert(HashMap::new());
         }
+        Vm::define_native("clock", clock_native);
     }
 
     pub fn push<T: Into<Value>>(value: T) {
@@ -103,11 +111,22 @@ impl Vm {
     }
     pub fn call_value(callee: Value, arg_count: u32) -> Result<()> {
         match callee.as_obj() {
-            Ok(obj) => match obj.as_function() {
-                Some(fun) => Vm::call(fun, arg_count),
-                None => unreachable!(),
-            },
-            Err(_) => Vm::runtime_error("Can only call functions and classes."),
+            Ok(obj) if obj.id() == ObjType::Function => {
+                let function = obj.as_function().unwrap();
+                Vm::call(function, arg_count)
+            }
+            Ok(obj) if obj.id() == ObjType::Native => {
+                let native = obj.as_native().unwrap().function;
+                let offset = unsafe { VM.stack_top.offset_from(&VM.stack[0]) as usize };
+                let slice = unsafe { &VM.stack[(offset - arg_count as usize)..offset] };
+                let result = native(slice);
+                unsafe {
+                    VM.stack_top = VM.stack_top.sub(arg_count as usize + 1);
+                }
+                Vm::push(result);
+                Ok(())
+            }
+            _ => Vm::runtime_error("Can only call functions and classes."),
         }
     }
     pub fn reset_stack() {
@@ -153,6 +172,18 @@ impl Vm {
         Err(Error::Runtime(error))
     }
 
+    pub fn define_native(name: &str, function: NativeFn) {
+        Vm::push(allocate_string(name));
+        Vm::push(ObjNative::new(function));
+        unsafe {
+            VM.globals.as_mut().unwrap().insert(
+                VM.stack[0].as_obj().unwrap().as_rstring().to_owned(),
+                VM.stack[1],
+            );
+        }
+        Vm::pop();
+        Vm::pop();
+    }
     pub fn interpret(source: &str) -> Result<()> {
         let function = compile(source)?;
         Vm::push(function as *const dyn Obj);
