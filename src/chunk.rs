@@ -218,6 +218,29 @@ impl Ip {
                     2,
                 )
             }
+            OpCode::Closure => {
+                let mut offset = offset + 1;
+                let constant = unsafe {
+                    self.head
+                        .add({
+                            offset += 1;
+                            (offset - 1) as usize
+                        })
+                        .read()
+                };
+                unsafe {
+                    (
+                        format!(
+                            "{} {:<11} {:04} {}\n",
+                            op,
+                            " ",
+                            constant,
+                            self.get_constant(constant)
+                        ),
+                        offset as usize,
+                    )
+                }
+            }
             OpCode::Loop => {
                 let mut jump = unsafe { (self.current.read() as u16) << 8 };
                 jump |= unsafe { self.current.add(1).read() as u16 };
@@ -297,106 +320,124 @@ mod opcode {
         Jump,
         Loop,
         Call,
+        Closure,
     }
+    macro_rules! from_and_into {
+        ( $( $code: tt, $name: tt, $value: literal),*) => {
+            impl From<OpCode> for u8 {
+                fn from(value: OpCode) -> Self {
 
-    impl Display for OpCode {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(
-                f,
-                "OP_{}",
-                match self {
-                    Self::Return => "RETURN",
-                    Self::Constant => "CONSTANT",
-                    Self::Negate => "NEGATE",
-                    Self::Add => "ADD",
-                    Self::Subtract => "SUBTRACT",
-                    Self::Multiply => "MULTIPLY",
-                    Self::Divide => "DIVIDE",
-                    Self::Nil => "NIL",
-                    Self::True => "TRUE",
-                    Self::False => "False",
-                    Self::Not => "NOT",
-                    Self::Equal => "EQUAL",
-                    Self::Greater => "GREATER",
-                    Self::Less => "LESS",
-                    Self::Print => "PRINT",
-                    Self::Pop => "POP",
-                    Self::DefineGlobal => "DEFINE_GLOBAL",
-                    Self::GetGlobal => "GET_GLOBAL",
-                    Self::SetGlobal => "SET_GLOBAL",
-                    Self::GetLocal => "GET_LOCAL",
-                    Self::SetLocal => "SET_LOCAL",
-                    Self::JumpIfFalse => "JUMP_IF_FALSE",
-                    Self::Jump => "JUMP",
-                    Self::Loop => "LOOP",
-                    OpCode::Call => "CALL",
+                    match value {
+                        $(
+                            OpCode::$code => $value,
+                        )*
+                    }
                 }
-            )
-        }
-    }
-
-    impl From<OpCode> for u8 {
-        fn from(code: OpCode) -> Self {
-            match code {
-                OpCode::Return => 0,
-                OpCode::Constant => 1,
-                OpCode::Negate => 2,
-                OpCode::Add => 3,
-                OpCode::Subtract => 4,
-                OpCode::Multiply => 5,
-                OpCode::Divide => 6,
-                OpCode::Nil => 7,
-                OpCode::True => 8,
-                OpCode::False => 9,
-                OpCode::Not => 10,
-                OpCode::Equal => 11,
-                OpCode::Greater => 12,
-                OpCode::Less => 13,
-                OpCode::Print => 14,
-                OpCode::Pop => 15,
-                OpCode::DefineGlobal => 16,
-                OpCode::GetGlobal => 17,
-                OpCode::SetGlobal => 18,
-                OpCode::GetLocal => 19,
-                OpCode::SetLocal => 20,
-                OpCode::JumpIfFalse => 21,
-                OpCode::Jump => 22,
-                OpCode::Loop => 23,
-                OpCode::Call => 24,
             }
-        }
-    }
 
-    impl From<u8> for OpCode {
-        fn from(byte: u8) -> Self {
-            match byte {
-                0 => OpCode::Return,
-                1 => OpCode::Constant,
-                2 => OpCode::Negate,
-                3 => OpCode::Add,
-                4 => OpCode::Subtract,
-                5 => OpCode::Multiply,
-                6 => OpCode::Divide,
-                7 => OpCode::Nil,
-                8 => OpCode::True,
-                9 => OpCode::False,
-                10 => OpCode::Not,
-                11 => OpCode::Equal,
-                12 => OpCode::Greater,
-                13 => OpCode::Less,
-                14 => OpCode::Print,
-                15 => OpCode::Pop,
-                16 => OpCode::DefineGlobal,
-                17 => OpCode::GetGlobal,
-                18 => OpCode::SetGlobal,
-                19 => OpCode::GetLocal,
-                20 => OpCode::SetLocal,
-                21 => OpCode::JumpIfFalse,
-                22 => OpCode::Jump,
-                23 => OpCode::Loop,
-                24 => OpCode::Call,
-                _ => panic!("Unrecongnised OpCode: {}", byte),
+            impl From<u8> for OpCode {
+                fn from(op_code: u8) -> Self {
+                    match op_code {
+                        $(
+                            $value => Self::$code,
+                        )*
+                        _ => panic!("Unrecongnised OpCode: {}", op_code)                    }
+                }
             }
-        }
+
+            impl Display for OpCode {
+
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(
+                        f,
+                        "OP_{}",
+                        match self {
+                            $(
+                                Self::$code => $name,
+                            )*
+                        })
+                }
+            }
+        };
     }
+    from_and_into!(
+        Return,
+        "RETURN",
+        0,
+        Constant,
+        "CONSTANT",
+        1,
+        Negate,
+        "NEGATE",
+        2,
+        Add,
+        "ADD",
+        3,
+        Subtract,
+        "SUBTRACT",
+        4,
+        Multiply,
+        "MULTIPLY",
+        5,
+        Divide,
+        "DIVIDE",
+        6,
+        Nil,
+        "NIL",
+        7,
+        True,
+        "TRUE",
+        8,
+        False,
+        "FALSE",
+        9,
+        Not,
+        "NOT",
+        10,
+        Equal,
+        "EQUAL",
+        11,
+        Greater,
+        "GREATER",
+        12,
+        Less,
+        "LESS",
+        13,
+        Print,
+        "PRINT",
+        14,
+        Pop,
+        "POP",
+        15,
+        DefineGlobal,
+        "DEFINEGLOBAL",
+        16,
+        GetGlobal,
+        "GETGLOBAL",
+        17,
+        SetGlobal,
+        "SETGLOBAL",
+        18,
+        GetLocal,
+        "GETLOCAL",
+        19,
+        SetLocal,
+        "SETLOCAL",
+        20,
+        JumpIfFalse,
+        "JUMPIFFALSE",
+        21,
+        Jump,
+        "JUMP",
+        22,
+        Loop,
+        "LOOP",
+        23,
+        Call,
+        "CALL",
+        24,
+        Closure,
+        "CLOSURE",
+        25
+    );
 }

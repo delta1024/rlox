@@ -23,6 +23,13 @@ pub trait Obj: Debug + Display + Unpin {
     fn as_function(&self) -> Option<&ObjFunction> {
         None
     }
+
+    fn as_closure(&self) -> Option<&ObjClosure> {
+        None
+    }
+    fn as_closure_mut(&mut self) -> Option<&mut ObjClosure> {
+        None
+    }
 }
 
 #[derive(PartialEq)]
@@ -30,7 +37,37 @@ pub enum ObjType {
     Function,
     Native,
     String,
+    Closure,
     None,
+}
+#[derive(Debug)]
+pub struct ObjClosure {
+    pub function: *mut ObjFunction,
+}
+
+impl ObjClosure {
+    pub fn new(function: *mut ObjFunction) -> *mut ObjClosure {
+        Vm::allocate_obj(Self { function }) as *mut ObjClosure
+    }
+}
+impl Display for ObjClosure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        unsafe { write!(f, "{}", self.function.as_ref().unwrap()) }
+    }
+}
+impl Obj for ObjClosure {
+    fn id(&self) -> ObjType {
+        ObjType::Closure
+    }
+    fn as_rstring(&self) -> &str {
+        todo!()
+    }
+    fn as_closure(&self) -> Option<&ObjClosure> {
+        Some(self)
+    }
+    fn as_closure_mut(&mut self) -> Option<&mut ObjClosure> {
+        Some(self)
+    }
 }
 #[derive(Debug)]
 pub struct ObjFunction {
@@ -45,8 +82,7 @@ impl ObjFunction {
             chunk: Chunk::new(),
             name,
         };
-        let n = Vm::allocate_obj(Box::pin(function));
-        unsafe { n.as_mut().unwrap().as_function_mut().unwrap() }
+        Vm::allocate_obj(function) as *mut ObjFunction
     }
 }
 impl Display for ObjFunction {
@@ -79,21 +115,23 @@ pub struct ObjNative {
 }
 
 impl ObjNative {
-    pub fn new(function: NativeFn) -> *const dyn Obj {
-        let native = Box::pin(Self { function });
-        Vm::allocate_obj(native)
+    pub fn new(function: NativeFn) -> *mut dyn Obj {
+        Vm::allocate_obj(ObjNative { function })
     }
 }
+
 impl Debug for ObjNative {
     fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         unimplemented!()
     }
 }
+
 impl Display for ObjNative {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<native fn>")
     }
 }
+
 impl Obj for ObjNative {
     fn id(&self) -> ObjType {
         ObjType::Native
@@ -105,6 +143,7 @@ impl Obj for ObjNative {
         Some(self)
     }
 }
+
 #[derive(Debug, Eq, Hash, PartialOrd, Ord)]
 pub struct ObjString {
     chars: Vec<u8>,
@@ -164,19 +203,19 @@ impl Obj for ObjString {
         std::str::from_utf8(slice).unwrap()
     }
 }
-pub fn allocate_string(key: &str) -> *const dyn Obj {
+pub fn allocate_string(key: &str) -> *mut ObjString {
     let table = unsafe {
         let table = crate::vm::VM.strings.as_mut();
         table.unwrap()
     };
 
-    if let Some(string) = table.get(key) {
-        let n = Pin::get_ref(string.as_ref());
+    if let Some(string) = table.get_mut(key) {
+        let n = Pin::get_mut(string.as_mut());
         n
     } else {
         table.insert(key.to_string(), ObjString::new(key));
-        let n = table.get(key).unwrap();
-        let n = Pin::get_ref(n.as_ref());
+        let n = table.get_mut(key).unwrap();
+        let n = Pin::get_mut(n.as_mut());
         n
     }
 }

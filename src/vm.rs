@@ -2,7 +2,9 @@ pub use crate::error::VmError as Error;
 use crate::{
     chunk::{Ip, OpCode},
     compiler::compile,
-    objects::{allocate_string, NativeFn, Obj, ObjFunction, ObjNative, ObjString, ObjType},
+    objects::{
+        allocate_string, NativeFn, Obj, ObjClosure, ObjFunction, ObjNative, ObjString, ObjType,
+    },
     value::Value,
 };
 use std::{
@@ -26,14 +28,14 @@ const STACK_MAX: usize = FRAMES_MAX * u8::MAX as usize;
 
 #[derive(Clone, Copy)]
 struct CallFrame {
-    function: *const ObjFunction,
+    closure: *const ObjClosure,
     ip: Ip,
     slots: *mut Value,
 }
 impl CallFrame {
     const fn new() -> CallFrame {
         CallFrame {
-            function: ptr::null(),
+            closure: ptr::null(),
             ip: Ip::null(),
             slots: ptr::null_mut(),
         }
@@ -87,11 +89,11 @@ impl Vm {
     pub fn peek(distance: isize) -> Value {
         unsafe { VM.stack_top.offset(-1 - distance).read() }
     }
-    fn call(function: *const ObjFunction, arg_count: u32) -> Result<()> {
-        if arg_count != unsafe { function.as_ref().unwrap().arity } {
+    fn call(closure: *const ObjClosure, arg_count: u32) -> Result<()> {
+        if arg_count != unsafe { closure.as_ref().unwrap().function.as_ref().unwrap().arity } {
             Vm::runtime_error(&format!(
                 "Expected {} arguments but got {}",
-                unsafe { function.as_ref().unwrap().arity },
+                unsafe { closure.as_ref().unwrap().function.as_ref().unwrap().arity },
                 arg_count
             ))?;
         }
@@ -103,16 +105,25 @@ impl Vm {
         unsafe {
             VM.frame_count += 1;
         }
-        frame.function = function;
-        frame.ip = unsafe { function.as_ref().unwrap().chunk.ip() };
+        frame.closure = closure;
+        frame.ip = unsafe {
+            closure
+                .as_ref()
+                .unwrap()
+                .function
+                .as_ref()
+                .unwrap()
+                .chunk
+                .ip()
+        };
         frame.slots = unsafe { VM.stack_top.sub(arg_count as usize).sub(1) };
 
         Ok(())
     }
     pub fn call_value(callee: Value, arg_count: u32) -> Result<()> {
         match callee.as_obj() {
-            Ok(obj) if obj.id() == ObjType::Function => {
-                let function = obj.as_function().unwrap();
+            Ok(obj) if obj.id() == ObjType::Closure => {
+                let function = obj.as_closure().unwrap();
                 Vm::call(function, arg_count)
             }
             Ok(obj) if obj.id() == ObjType::Native => {
@@ -135,9 +146,9 @@ impl Vm {
             VM.frame_count = 0;
         }
     }
-    pub fn allocate_obj(obj: Pin<Box<dyn Obj>>) -> *mut dyn Obj {
+    pub fn allocate_obj<T: Obj + 'static>(obj: T) -> *mut dyn Obj {
         unsafe {
-            VM._objects.push_back(obj);
+            VM._objects.push_back(Box::pin(obj));
             let n = VM._objects.back_mut().unwrap().as_mut();
             let n: *mut dyn Obj = Pin::get_mut(n);
             n
@@ -153,7 +164,7 @@ impl Vm {
         unsafe {
             for i in (0..=(VM.frame_count - 1)).rev() {
                 let frame = &VM.frames[i];
-                let function = frame.function;
+                let function = frame.closure.as_ref().unwrap().function;
                 let function = function.as_ref().unwrap();
                 let instruction = frame.ip.offset() - 1;
                 error.push_str(&format!(
@@ -173,8 +184,8 @@ impl Vm {
     }
 
     pub fn define_native(name: &str, function: NativeFn) {
-        Vm::push(allocate_string(name));
-        Vm::push(ObjNative::new(function));
+        Vm::push(allocate_string(name) as *mut dyn Obj);
+        Vm::push(ObjNative::new(function) as *mut dyn Obj);
         unsafe {
             VM.globals.as_mut().unwrap().insert(
                 VM.stack[0].as_obj().unwrap().as_rstring().to_owned(),
@@ -186,8 +197,11 @@ impl Vm {
     }
     pub fn interpret(source: &str) -> Result<()> {
         let function = compile(source)?;
-        Vm::push(function as *const dyn Obj);
-        Vm::call(function, 0)?;
+        Vm::push(function as *mut dyn Obj);
+        let closure = ObjClosure::new(function);
+        Vm::pop();
+        Vm::push(closure as *mut dyn Obj);
+        Vm::call(closure, 0)?;
         Vm::run()
     }
 
@@ -251,7 +265,7 @@ impl Vm {
         let a = Vm::pop();
         let a = a.as_obj().unwrap().as_rstring();
         let c = ObjString::concat(a, b);
-        let c = crate::objects::allocate_string(c.as_rstring());
+        let c = crate::objects::allocate_string(c.as_rstring()) as *mut dyn Obj;
         Vm::push(c);
     }
     fn run() -> Result<()> {
@@ -273,6 +287,12 @@ impl Vm {
             }
 
             match instruction.into() {
+                OpCode::Closure => {
+                    let mut function = Vm::read_constant(frame);
+                    let function = function.as_obj_mut().unwrap().as_function_mut().unwrap();
+                    let closure = ObjClosure::new(function);
+                    Vm::push(closure as *mut dyn Obj);
+                }
                 OpCode::Call => {
                     let arg_count = Vm::read_byte(frame);
                     let p_val = Vm::peek(arg_count as isize);

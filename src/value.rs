@@ -9,13 +9,20 @@ use crate::objects::{Obj, ObjType};
 pub enum Value {
     Number(f64),
     Bool(bool),
-    Obj(*const dyn Obj),
+    Obj(*mut dyn Obj),
     Null,
 }
 impl Value {
     pub fn as_obj(&self) -> Result<&dyn Obj, Error> {
         if let Self::Obj(o) = self {
             unsafe { Ok((*o).as_ref().unwrap()) }
+        } else {
+            Err(Error)
+        }
+    }
+    pub fn as_obj_mut(&mut self) -> Result<&mut dyn Obj, Error> {
+        if let Self::Obj(o) = self {
+            unsafe { Ok((*o).as_mut().unwrap()) }
         } else {
             Err(Error)
         }
@@ -87,8 +94,8 @@ impl From<bool> for Value {
     }
 }
 
-impl From<*const dyn Obj> for Value {
-    fn from(s: *const dyn Obj) -> Self {
+impl From<*mut dyn Obj> for Value {
+    fn from(s: *mut dyn Obj) -> Self {
         Self::Obj(s)
     }
 }
