@@ -1,16 +1,22 @@
 mod chunk;
 mod compiler;
 mod error;
+mod memory;
 mod objects;
 mod scanner;
 mod value;
 mod vm;
+use memory::GarbageCollector;
 use std::{
     env,
     fs::File,
     io::{self, Read, Write},
     process::exit,
 };
+
+#[global_allocator]
+static GLOBAL: GarbageCollector = GarbageCollector;
+
 fn repl() -> io::Result<()> {
     loop {
         let mut input = String::new();
