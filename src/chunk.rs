@@ -36,6 +36,7 @@ impl Lines {
 }
 
 const NAME_LEN: usize = 250;
+//#[derive(Debug)]
 pub struct Chunk {
     pub code: Vec<u8>,
     lines: Lines,
@@ -195,11 +196,13 @@ impl Ip {
 
         let op: OpCode = unsafe { self.current.sub(1).read().into() };
         match op {
+            // constantInstruction
             OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::SetGlobal => {
                 let n = self.peek().unwrap();
                 let m = unsafe { self.get_constant(n) };
                 (format!("{} {:<9}{} '{}'", op, " ", n, m), 1)
             }
+            // jumpInstruction
             OpCode::Jump | OpCode::JumpIfFalse => {
                 let mut jump = unsafe { (self.current.read() as u16) << 8 };
                 jump |= unsafe { self.current.add(1).read() as u16 };
@@ -219,7 +222,7 @@ impl Ip {
                 )
             }
             OpCode::Closure => {
-                let mut offset = offset + 1;
+                let mut offset = offset;
                 let constant = unsafe {
                     self.head
                         .add({
@@ -228,19 +231,43 @@ impl Ip {
                         })
                         .read()
                 };
-                unsafe {
-                    (
-                        format!(
-                            "{} {:<11} {:04} {}\n",
-                            op,
-                            " ",
-                            constant,
-                            self.get_constant(constant)
-                        ),
-                        offset as usize,
-                    )
+
+                let function = unsafe { self.get_constant(constant) };
+                let mut out = format!("{} {:<11} {:04} {}\n", op, " ", constant, function);
+                let function_obj = function.as_obj().expect("Expect obj value");
+                let function = function_obj
+                    .as_function()
+                    .expect("Expected function object");
+
+                let mut n = 0;
+                for _ in 0..function.upvalue_count {
+                    let is_local = unsafe {
+                        self.head
+                            .add({
+                                offset += 1;
+                                offset as usize - 1
+                            })
+                            .read()
+                    };
+                    let index = unsafe {
+                        self.head
+                            .add({
+                                offset += 1;
+                                offset as usize - 1
+                            })
+                            .read()
+                    };
+                    out.push_str(&format!(
+                        "{:04}      |                     {} {} \n",
+                        offset - 2,
+                        if is_local == 1 { "local" } else { "upvalue" },
+                        index
+                    ));
+                    n += 2;
                 }
+                (out, n as usize + 2)
             }
+            // loopInstruction
             OpCode::Loop => {
                 let mut jump = unsafe { (self.current.read() as u16) << 8 };
                 jump |= unsafe { self.current.add(1).read() as u16 };
@@ -255,7 +282,12 @@ impl Ip {
                     2,
                 )
             }
-            OpCode::GetLocal | OpCode::SetLocal | OpCode::Call => {
+            // byteInstruction
+            OpCode::GetLocal
+            | OpCode::SetLocal
+            | OpCode::Call
+            | OpCode::GetUpvalue
+            | OpCode::SetUpvalue => {
                 let slot = self.peek().unwrap();
                 (format! {"{} {:<5} {}", op, " ", slot}, 1)
             }
@@ -323,6 +355,7 @@ mod opcode {
         Closure,
         GetUpvalue,
         SetUpvalue,
+        CloseUpvalue,
     }
     macro_rules! from_and_into {
         ( $( $code: tt, $name: tt, $value: literal),*) => {
@@ -446,6 +479,9 @@ mod opcode {
         26,
         SetUpvalue,
         "SET_UPVALUE",
-        27
+        27,
+        CloseUpvalue,
+        "CLOSE_UPVALUE",
+        28
     );
 }

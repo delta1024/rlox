@@ -82,7 +82,7 @@ impl Compiler {
         let upvalue_count = self.function().upvalue_count as usize;
         for i in 0..upvalue_count {
             let upvalue = self.upvalues[i];
-            if upvalue.index == Some(index) && upvalue.is_local == is_local {
+            if upvalue.index as u8 == index && upvalue.is_local == is_local {
                 return Ok(i as u8);
             }
         }
@@ -90,16 +90,21 @@ impl Compiler {
             return CompilerError::new("Too many closure variables in function.");
         }
         self.upvalues[upvalue_count].is_local = is_local;
-        self.upvalues[upvalue_count].index = Some(index);
+        self.upvalues[upvalue_count].index = index as isize;
         self.function().upvalue_count += 1;
         Ok(self.function().upvalue_count as u8 - 1)
     }
     fn resolve_upvalue(&mut self, name: Token) -> CmpResult<Option<u8>> {
         if let Some(enclosing) = self.enclosing() {
             if let Some(local) = enclosing.resolve_local(name)? {
+                enclosing.locals[local as usize].is_captured = true;
                 Ok(Some(self.add_upvalue(local, true)?))
             } else {
-                Ok(None)
+                if let Some(upvalue) = enclosing.resolve_upvalue(name)? {
+                    Ok(Some(self.add_upvalue(upvalue, false)?))
+                } else {
+                    Ok(None)
+                }
             }
         } else {
             Ok(None)
@@ -124,6 +129,7 @@ impl Compiler {
 struct Local {
     name: Token,
     depth: isize,
+    is_captured: bool,
 }
 
 impl Local {
@@ -134,19 +140,23 @@ impl Local {
             length: 0,
             line: 0,
         };
-        Local { name, depth: -1 }
+        Local {
+            name,
+            depth: -1,
+            is_captured: false,
+        }
     }
 }
 #[derive(Clone, Copy, Debug)]
 struct Upvalue {
-    index: Option<u8>,
+    index: isize,
     is_local: bool,
 }
 
 impl Upvalue {
     fn new() -> Self {
         Self {
-            index: None,
+            index: -1,
             is_local: false,
         }
     }
@@ -319,7 +329,7 @@ impl<'b> Parser<'b> {
     fn make_constant<T: Into<Value>>(&mut self, value: T) -> u8 {
         self.current_chunk().constant(value.into())
     }
-    fn end_compiler(&mut self) -> *mut ObjFunction {
+    fn end_compiler(&mut self) -> (*mut Compiler, *mut ObjFunction) {
         self.emit_return();
         let function = self.compiler().function();
         if function.name.is_null() {
@@ -333,8 +343,9 @@ impl<'b> Parser<'b> {
             println!("{:?}", self.current_chunk());
         }
         let function = self.compiler().function;
+        let compiler = self.compiler;
         self.compiler = self.compiler().enclosing;
-        function
+        (compiler, function)
     }
 
     fn begin_scope(&mut self) {
@@ -349,7 +360,12 @@ impl<'b> Parser<'b> {
             self.compiler().locals[local_count].depth
         } > self.compiler().scope_depth
         {
-            self.emit_byte(OpCode::Pop);
+            let local_count = self.compiler().local_count - 1;
+            if self.compiler().locals[local_count].is_captured {
+                self.emit_byte(OpCode::CloseUpvalue);
+            } else {
+                self.emit_byte(OpCode::Pop);
+            }
             self.compiler().local_count -= 1;
         }
     }
@@ -612,9 +628,25 @@ mod compiler_functions {
         parser.consume(TokenType::RightParen, "Expect ')' after paramaters.")?;
         parser.consume(TokenType::LeftBrace, "Expect '{' befor funciton body.")?;
         block(parser)?;
-        let function = parser.end_compiler() as *mut dyn Obj;
-        let constant = parser.make_constant(function);
+        let (compiler, function) = parser.end_compiler();
+        let constant = parser.make_constant(function as *mut dyn Obj);
         parser.emit_bytes(OpCode::Closure, constant);
+        dbg!(unsafe { function.as_ref().unwrap().upvalue_count });
+        for i in 0..unsafe {
+            function
+                .as_ref()
+                .expect("Uninitialized function")
+                .upvalue_count as usize
+        } {
+            let local = if unsafe { compiler.as_ref().unwrap() }.upvalues[i].is_local {
+                1
+            } else {
+                0
+            };
+            parser.emit_byte(local);
+            let index = unsafe { compiler.as_ref().unwrap() }.upvalues[i].index;
+            parser.emit_byte(index as u8);
+        }
         Ok(())
     }
     pub(super) fn fun_declaration(parser: &mut Parser) -> Result<()> {
@@ -793,7 +825,7 @@ pub fn compile(source: &str) -> Result<*mut ObjFunction> {
     if let Err(err) = parser.had_error {
         Err(err)
     } else {
-        Ok(n)
+        Ok(n.1)
     }
 }
 

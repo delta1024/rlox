@@ -3,7 +3,7 @@ use crate::{
     chunk::{Ip, OpCode},
     compiler::compile,
     objects::{
-        allocate_string, NativeFn, Obj, ObjClosure, ObjFunction, ObjNative, ObjString, ObjType,
+        allocate_string, NativeFn, Obj, ObjClosure, ObjNative, ObjString, ObjType, ObjUpvalue,
     },
     value::Value,
 };
@@ -11,7 +11,7 @@ use std::{
     collections::{HashMap, LinkedList},
     pin::Pin,
     ptr, result,
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 
 pub static mut VM: Vm = Vm::new();
@@ -62,6 +62,7 @@ pub struct Vm {
     _objects: LinkedList<Pin<Box<dyn Obj>>>,
     pub strings: Option<HashMap<String, Pin<Box<ObjString>>>>,
     pub globals: Option<HashMap<String, Value>>,
+    pub open_upvalues: *mut ObjUpvalue,
 }
 
 impl Vm {
@@ -74,6 +75,7 @@ impl Vm {
             _objects: LinkedList::new(),
             strings: None,
             globals: None,
+            open_upvalues: ptr::null_mut(),
         }
     }
 
@@ -142,6 +144,49 @@ impl Vm {
                 Ok(())
             }
             _ => Vm::runtime_error("Can only call functions and classes."),
+        }
+    }
+    fn capture_upvalue(local: *mut Value) -> *mut ObjUpvalue {
+        let mut prev_upvale = ptr::null_mut();
+        let mut upvalue = unsafe { VM.open_upvalues };
+        while !upvalue.is_null() && {
+            let upvalue = unsafe { upvalue.as_ref().unwrap() };
+            upvalue.location > local
+        } {
+            prev_upvale = upvalue;
+            upvalue = unsafe { upvalue.as_ref().unwrap().next };
+        }
+
+        if !upvalue.is_null() && {
+            let upvalue = unsafe { upvalue.as_ref().unwrap() };
+            upvalue.location == local
+        } {
+            return upvalue;
+        }
+        let created_upvale = ObjUpvalue::new(local);
+        unsafe { created_upvale.as_mut() }
+            .expect("uninitialized upvalue.")
+            .next = upvalue;
+        if prev_upvale.is_null() {
+            unsafe {
+                VM.open_upvalues = created_upvale;
+            }
+        } else {
+            unsafe {
+                prev_upvale.as_mut().unwrap().next = created_upvale;
+            }
+        }
+        created_upvale
+    }
+    pub fn close_upvalue(last: *mut Value) {
+        unsafe {
+            while !VM.open_upvalues.is_null() && VM.open_upvalues.as_ref().unwrap().location >= last
+            {
+                let upvalue = VM.open_upvalues.as_mut().unwrap();
+                upvalue.closed = *upvalue.location;
+                upvalue.location = &mut upvalue.closed;
+                VM.open_upvalues = upvalue.next;
+            }
         }
     }
     pub fn reset_stack() {
@@ -295,6 +340,34 @@ impl Vm {
             }
 
             match instruction.into() {
+                OpCode::CloseUpvalue => {
+                    Vm::close_upvalue(unsafe { VM.stack_top.sub(1) });
+                    Vm::pop();
+                }
+                OpCode::GetUpvalue => {
+                    let slot = Vm::read_byte(frame) as usize;
+                    let value = unsafe {
+                        *frame.as_ref().unwrap().closure().upvalues[slot]
+                            .as_ref()
+                            .unwrap()
+                            .location
+                    };
+                    Vm::push(value);
+                }
+
+                OpCode::SetUpvalue => {
+                    let slot = Vm::read_byte(frame) as usize;
+                    unsafe {
+                        std::ptr::write(
+                            frame.as_ref().unwrap().closure().upvalues[slot]
+                                .as_mut()
+                                .unwrap()
+                                .location,
+                            Vm::peek(0),
+                        );
+                    }
+                }
+
                 OpCode::Closure => {
                     let mut function = Vm::read_constant(frame);
                     let function = function
@@ -304,6 +377,19 @@ impl Vm {
                         .expect("Expected funtion object.");
                     let closure = ObjClosure::new(function);
                     Vm::push(closure as *mut dyn Obj);
+                    let closure = unsafe { closure.as_mut().unwrap() };
+                    for i in 0..closure.upvalue_count {
+                        let is_local = Vm::read_byte(frame);
+                        let index = Vm::read_byte(frame) as usize;
+                        if is_local == 1 {
+                            closure.upvalues[i] = Vm::capture_upvalue(
+                                &mut unsafe { frame.as_mut().unwrap() }.slots()[index],
+                            )
+                        } else {
+                            closure.upvalues[i] =
+                                unsafe { frame.as_mut().unwrap().closure().upvalues[index] }
+                        }
+                    }
                 }
                 OpCode::Call => {
                     let arg_count = Vm::read_byte(frame);
@@ -315,6 +401,7 @@ impl Vm {
                 OpCode::Return => {
                     let result = Vm::pop();
                     unsafe {
+                        Vm::close_upvalue(frame.as_ref().unwrap().slots);
                         VM.frame_count -= 1;
                         if VM.frame_count == 0 {
                             Vm::pop();

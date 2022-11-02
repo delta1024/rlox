@@ -30,24 +30,37 @@ pub trait Obj: Debug + Display + Unpin {
     fn as_closure_mut(&mut self) -> Option<&mut ObjClosure> {
         None
     }
+    fn as_upvalue(&self) -> Option<&ObjUpvalue> {
+        None
+    }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum ObjType {
     Function,
     Native,
     String,
     Closure,
+    Upvalue,
     None,
 }
 #[derive(Debug)]
 pub struct ObjClosure {
     pub function: *mut ObjFunction,
+    pub upvalues: Vec<*mut ObjUpvalue>,
+    pub upvalue_count: usize,
 }
 
 impl ObjClosure {
     pub fn new(function: *mut ObjFunction) -> *mut ObjClosure {
-        Vm::allocate_obj(Self { function }) as *mut ObjClosure
+        let upvalue_count = unsafe { function.as_ref() }.unwrap().upvalue_count as usize;
+        let mut upvalues = Vec::with_capacity(upvalue_count);
+        upvalues.resize(upvalue_count, std::ptr::null_mut());
+        Vm::allocate_obj(Self {
+            function,
+            upvalues,
+            upvalue_count,
+        }) as *mut ObjClosure
     }
     pub fn function(&self) -> &ObjFunction {
         unsafe {
@@ -233,5 +246,42 @@ pub fn allocate_string(key: &str) -> *mut ObjString {
         let n = table.get_mut(key).unwrap();
         let n = Pin::get_mut(n.as_mut());
         n
+    }
+}
+
+#[derive(Debug)]
+pub struct ObjUpvalue {
+    pub location: *mut Value,
+    pub closed: Value,
+    pub next: *mut ObjUpvalue,
+}
+
+impl ObjUpvalue {
+    pub fn new(slot: *mut Value) -> *mut ObjUpvalue {
+        Vm::allocate_obj(ObjUpvalue {
+            location: slot,
+            closed: Value::Null,
+            next: std::ptr::null_mut(),
+        }) as *mut ObjUpvalue
+    }
+}
+
+impl Display for ObjUpvalue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "upvalue")
+    }
+}
+
+impl Obj for ObjUpvalue {
+    fn id(&self) -> ObjType {
+        ObjType::Upvalue
+    }
+
+    fn as_rstring(&self) -> &str {
+        "upvalue"
+    }
+
+    fn as_upvalue(&self) -> Option<&ObjUpvalue> {
+        Some(self)
     }
 }
