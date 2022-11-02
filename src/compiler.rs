@@ -6,11 +6,9 @@ use crate::{
     scanner::{self, Scanner, Token, TokenType},
     value::Value,
 };
-use std::{
-    ptr,
-    result::{self, Result as StdResult},
-};
+use std::{ptr, result};
 pub type Result<T> = result::Result<T, Error>;
+type CmpResult<T> = result::Result<T, CompilerError>;
 use rule::{get_rule, Precedence};
 const U8_MAX: usize = u8::MAX as usize;
 #[derive(PartialEq, PartialOrd)]
@@ -23,6 +21,7 @@ struct Compiler {
     enclosing: *mut Compiler,
     id: FunctionType,
     locals: [Local; U8_MAX],
+    upvalues: [Upvalue; U8_MAX],
     local_count: usize,
     scope_depth: isize,
 }
@@ -38,6 +37,7 @@ impl Compiler {
             function: m,
             id,
             locals: [Local::null(); U8_MAX],
+            upvalues: [Upvalue::new(); U8_MAX],
             local_count: 0,
             scope_depth: 0,
             enclosing,
@@ -50,9 +50,9 @@ impl Compiler {
         n
     }
 
-    fn add_local(&mut self, name: Token) -> StdResult<(), CompilerError> {
+    fn add_local(&mut self, name: Token) -> CmpResult<()> {
         if self.local_count == U8_MAX {
-            return Err(CompilerError::new("Too many local variables in function."));
+            return CompilerError::new("Too many local variables in function.");
         }
         let local = &mut self.locals[self.local_count];
         self.local_count += 1;
@@ -61,7 +61,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn resolve_local(&self, name: Token) -> StdResult<Option<u8>, CompilerError> {
+    fn resolve_local(&self, name: Token) -> CmpResult<Option<u8>> {
         if self.local_count > 0 {
             for i in (0..=(self.local_count - 1)).rev() {
                 let local = &self.locals[i];
@@ -69,15 +69,42 @@ impl Compiler {
                     return Ok(Some(i as u8));
                 }
                 if local.depth == -1 {
-                    return Err(CompilerError::new(
+                    return CompilerError::new(
                         "Cannot initialize variable in its own declaration.",
-                    ));
+                    );
                 }
             }
         }
         Ok(None)
     }
 
+    fn add_upvalue(&mut self, index: u8, is_local: bool) -> CmpResult<u8> {
+        let upvalue_count = self.function().upvalue_count as usize;
+        for i in 0..upvalue_count {
+            let upvalue = self.upvalues[i];
+            if upvalue.index == Some(index) && upvalue.is_local == is_local {
+                return Ok(i as u8);
+            }
+        }
+        if upvalue_count == U8_MAX {
+            return CompilerError::new("Too many closure variables in function.");
+        }
+        self.upvalues[upvalue_count].is_local = is_local;
+        self.upvalues[upvalue_count].index = Some(index);
+        self.function().upvalue_count += 1;
+        Ok(self.function().upvalue_count as u8 - 1)
+    }
+    fn resolve_upvalue(&mut self, name: Token) -> CmpResult<Option<u8>> {
+        if let Some(enclosing) = self.enclosing() {
+            if let Some(local) = enclosing.resolve_local(name)? {
+                Ok(Some(self.add_upvalue(local, true)?))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    }
     fn mark_initialized(&mut self) {
         if self.scope_depth == 0 {
             return;
@@ -87,6 +114,9 @@ impl Compiler {
 
     fn function(&mut self) -> &mut ObjFunction {
         unsafe { self.function.as_mut().unwrap() }
+    }
+    fn enclosing(&mut self) -> Option<&mut Compiler> {
+        unsafe { self.enclosing.as_mut() }
     }
 }
 
@@ -105,6 +135,20 @@ impl Local {
             line: 0,
         };
         Local { name, depth: -1 }
+    }
+}
+#[derive(Clone, Copy, Debug)]
+struct Upvalue {
+    index: Option<u8>,
+    is_local: bool,
+}
+
+impl Upvalue {
+    fn new() -> Self {
+        Self {
+            index: None,
+            is_local: false,
+        }
     }
 }
 struct Parser<'b> {
@@ -337,7 +381,7 @@ impl<'b> Parser<'b> {
         self.current_chunk().constant(string.into())
     }
 
-    fn declare_variable(&mut self) -> StdResult<(), CompilerError> {
+    fn declare_variable(&mut self) -> CmpResult<()> {
         if self.compiler().scope_depth == 0 {
             return Ok(());
         }
@@ -353,7 +397,7 @@ impl<'b> Parser<'b> {
                 }
 
                 if name.extract() == local.name.extract() {
-                    let _ = self.error("Already a variable with this name in this scope.");
+                    self.error("Already a variable with this name in this scope.")?;
                 }
             }
         }
@@ -399,14 +443,16 @@ impl<'b> Parser<'b> {
     }
 
     fn named_variable(&mut self, name: Token, can_assign: bool) -> Result<()> {
-        let (arg, get_opt, set_opt) = match self.compiler().resolve_local(name) {
-            Ok(Some(n)) => (n, OpCode::GetLocal, OpCode::SetLocal),
-            Ok(None) => (
-                self.identifier_constant(name),
-                OpCode::GetGlobal,
-                OpCode::SetGlobal,
-            ),
-            Err(err) => return self.error(err),
+        let (arg, get_opt, set_opt) = match self.compiler().resolve_local(name)? {
+            Some(n) => (n, OpCode::GetLocal, OpCode::SetLocal),
+            None => match self.compiler().resolve_upvalue(name)? {
+                Some(n) => (n, OpCode::GetUpvalue, OpCode::SetUpvalue),
+                None => (
+                    self.identifier_constant(name),
+                    OpCode::GetGlobal,
+                    OpCode::SetGlobal,
+                ),
+            },
         };
 
         let code = if can_assign && self.matches(TokenType::Equal).unwrap() {

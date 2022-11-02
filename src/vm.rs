@@ -40,6 +40,19 @@ impl CallFrame {
             slots: ptr::null_mut(),
         }
     }
+
+    fn slots(&self) -> &mut [Value] {
+        let offset = unsafe { self.slots.offset_from(&VM.stack[0]) };
+        let remaining = STACK_MAX - offset as usize;
+        unsafe { std::slice::from_raw_parts_mut(self.slots, remaining) }
+    }
+    fn closure(&self) -> &ObjClosure {
+        unsafe {
+            self.closure
+                .as_ref()
+                .expect("Uninitialized closure in call frame.")
+        }
+    }
 }
 pub struct Vm {
     frames: [CallFrame; FRAMES_MAX],
@@ -89,11 +102,11 @@ impl Vm {
     pub fn peek(distance: isize) -> Value {
         unsafe { VM.stack_top.offset(-1 - distance).read() }
     }
-    fn call(closure: *const ObjClosure, arg_count: u32) -> Result<()> {
-        if arg_count != unsafe { closure.as_ref().unwrap().function.as_ref().unwrap().arity } {
+    fn call(closure: &ObjClosure, arg_count: u32) -> Result<()> {
+        if arg_count != closure.function().arity {
             Vm::runtime_error(&format!(
                 "Expected {} arguments but got {}",
-                unsafe { closure.as_ref().unwrap().function.as_ref().unwrap().arity },
+                closure.function().arity,
                 arg_count
             ))?;
         }
@@ -106,16 +119,7 @@ impl Vm {
             VM.frame_count += 1;
         }
         frame.closure = closure;
-        frame.ip = unsafe {
-            closure
-                .as_ref()
-                .unwrap()
-                .function
-                .as_ref()
-                .unwrap()
-                .chunk
-                .ip()
-        };
+        frame.ip = closure.function().chunk.ip();
         frame.slots = unsafe { VM.stack_top.sub(arg_count as usize).sub(1) };
 
         Ok(())
@@ -123,8 +127,8 @@ impl Vm {
     pub fn call_value(callee: Value, arg_count: u32) -> Result<()> {
         match callee.as_obj() {
             Ok(obj) if obj.id() == ObjType::Closure => {
-                let function = obj.as_closure().unwrap();
-                Vm::call(function, arg_count)
+                let closure = obj.as_closure().expect("Expected closure obj");
+                Vm::call(closure, arg_count)
             }
             Ok(obj) if obj.id() == ObjType::Native => {
                 let native = obj.as_native().unwrap().function;
@@ -164,7 +168,7 @@ impl Vm {
         unsafe {
             for i in (0..=(VM.frame_count - 1)).rev() {
                 let frame = &VM.frames[i];
-                let function = frame.closure.as_ref().unwrap().function;
+                let function = frame.closure().function;
                 let function = function.as_ref().unwrap();
                 let instruction = frame.ip.offset() - 1;
                 error.push_str(&format!(
@@ -198,7 +202,11 @@ impl Vm {
     pub fn interpret(source: &str) -> Result<()> {
         let function = compile(source)?;
         Vm::push(function as *mut dyn Obj);
-        let closure = ObjClosure::new(function);
+        let closure = unsafe {
+            ObjClosure::new(function)
+                .as_mut()
+                .expect("Uninitialized closure in chunk.")
+        };
         Vm::pop();
         Vm::push(closure as *mut dyn Obj);
         Vm::call(closure, 0)?;
@@ -289,7 +297,11 @@ impl Vm {
             match instruction.into() {
                 OpCode::Closure => {
                     let mut function = Vm::read_constant(frame);
-                    let function = function.as_obj_mut().unwrap().as_function_mut().unwrap();
+                    let function = function
+                        .as_obj_mut()
+                        .expect("Expected object value.")
+                        .as_function_mut()
+                        .expect("Expected funtion object.");
                     let closure = ObjClosure::new(function);
                     Vm::push(closure as *mut dyn Obj);
                 }
@@ -393,7 +405,7 @@ impl Vm {
                 OpCode::GetLocal => {
                     let slot = Vm::read_byte(frame) as usize;
                     let frame = unsafe { frame.as_mut().unwrap() };
-                    let val = unsafe { frame.slots.add(slot).read() };
+                    let val = frame.slots()[slot];
                     Vm::push(val);
                 }
                 OpCode::SetLocal => {
@@ -401,7 +413,7 @@ impl Vm {
                     let val = Vm::peek(0);
                     unsafe {
                         let frame = frame.as_mut().unwrap();
-                        frame.slots.add(slot).write(val);
+                        frame.slots()[slot] = val;
                     }
                 }
                 OpCode::Jump => {

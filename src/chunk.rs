@@ -321,6 +321,8 @@ mod opcode {
         Loop,
         Call,
         Closure,
+        GetUpvalue,
+        SetUpvalue,
     }
     macro_rules! from_and_into {
         ( $( $code: tt, $name: tt, $value: literal),*) => {
@@ -410,22 +412,22 @@ mod opcode {
         "POP",
         15,
         DefineGlobal,
-        "DEFINEGLOBAL",
+        "DEFINE_GLOBAL",
         16,
         GetGlobal,
-        "GETGLOBAL",
+        "GET_GLOBAL",
         17,
         SetGlobal,
-        "SETGLOBAL",
+        "SET_GLOBAL",
         18,
         GetLocal,
-        "GETLOCAL",
+        "GET_LOCAL",
         19,
         SetLocal,
-        "SETLOCAL",
+        "SET_LOCAL",
         20,
         JumpIfFalse,
-        "JUMPIFFALSE",
+        "JUMP_IF_FALSE",
         21,
         Jump,
         "JUMP",
@@ -438,6 +440,12 @@ mod opcode {
         24,
         Closure,
         "CLOSURE",
-        25
+        25,
+        GetUpvalue,
+        "GET_UPVALUE",
+        26,
+        SetUpvalue,
+        "SET_UPVALUE",
+        27
     );
 }

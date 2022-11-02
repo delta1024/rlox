@@ -49,6 +49,20 @@ impl ObjClosure {
     pub fn new(function: *mut ObjFunction) -> *mut ObjClosure {
         Vm::allocate_obj(Self { function }) as *mut ObjClosure
     }
+    pub fn function(&self) -> &ObjFunction {
+        unsafe {
+            self.function
+                .as_ref()
+                .expect("Unintialized funciton in closure.")
+        }
+    }
+    pub fn function_mut(&mut self) -> &mut ObjFunction {
+        unsafe {
+            self.function
+                .as_mut()
+                .expect("Uninitialized function in closure.")
+        }
+    }
 }
 impl Display for ObjClosure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -74,6 +88,7 @@ pub struct ObjFunction {
     pub arity: u32,
     pub chunk: Chunk,
     pub name: *const ObjString,
+    pub upvalue_count: u32,
 }
 impl ObjFunction {
     pub fn new(name: *const ObjString) -> *mut ObjFunction {
@@ -81,6 +96,7 @@ impl ObjFunction {
             arity: 0,
             chunk: Chunk::new(),
             name,
+            upvalue_count: 0,
         };
         Vm::allocate_obj(function) as *mut ObjFunction
     }

@@ -35,8 +35,8 @@ impl From<ParserError> for VmError {
 #[derive(Debug, Clone)]
 pub struct CompilerError(pub String);
 impl CompilerError {
-    pub fn new(message: &str) -> Self {
-        Self(String::from(message))
+    pub fn new<T>(message: &str) -> Result<T, Self> {
+        Err(Self(String::from(message)))
     }
 }
 impl fmt::Display for CompilerError {
@@ -48,6 +48,11 @@ impl Error for CompilerError {}
 impl From<CompilerError> for ParserError {
     fn from(s: CompilerError) -> Self {
         Self(s.0)
+    }
+}
+impl From<ParserError> for CompilerError {
+    fn from(e: ParserError) -> Self {
+        Self(e.0)
     }
 }
 impl From<CompilerError> for String {
