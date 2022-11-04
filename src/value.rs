@@ -41,7 +41,6 @@ impl PartialEq for Value {
 
                 match (lhs.id(), rhs.id()) {
                     (ObjType::String, ObjType::String) => lhs.as_string() == rhs.as_string(),
-                    (ObjType::None, ObjType::None) => true,
                     _ => false,
                 }
             }

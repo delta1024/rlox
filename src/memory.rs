@@ -1,6 +1,6 @@
 use crate::{
     compiler::mark_compiler_roots,
-    objects::{Obj, ObjClosure, ObjString, ObjType},
+    objects::{Obj, ObjString, ObjType},
     value::Value,
     vm::VM,
 };
@@ -122,7 +122,16 @@ impl GarbageCollector {
                     Self::mark_obj(*i);
                 }
             }
-            ObjType::None | ObjType::Native | ObjType::String => return,
+            ObjType::Class => {
+                let klass = object.as_class_mut().unwrap();
+                Self::mark_obj(klass.name);
+            }
+            ObjType::Instance => {
+                let instance = object.as_instance_mut().unwrap();
+                Self::mark_obj(instance.klass);
+                Self::mark_table(&mut instance.fields);
+            }
+            ObjType::Native | ObjType::String => return,
         }
     }
     unsafe fn mark_array(array: &mut Vec<Value>) {

@@ -3,7 +3,8 @@ use crate::{
     chunk::{Ip, OpCode},
     compiler::compile,
     objects::{
-        allocate_string, NativeFn, Obj, ObjClosure, ObjNative, ObjString, ObjType, ObjUpvalue,
+        allocate_string, NativeFn, Obj, ObjClass, ObjClosure, ObjInstance, ObjNative, ObjString,
+        ObjType, ObjUpvalue,
     },
     value::Value,
 };
@@ -143,6 +144,16 @@ impl Vm {
     }
     pub fn call_value(mut callee: Value, arg_count: u32) -> Result<()> {
         match callee.as_obj_mut() {
+            Ok(obj) if obj.id() == ObjType::Class => {
+                let klass = obj.as_class_mut().unwrap();
+                unsafe {
+                    VM.stack_top
+                        .sub(arg_count as usize)
+                        .sub(1)
+                        .write((ObjInstance::new(klass) as *mut dyn Obj).into());
+                }
+                Ok(())
+            }
             Ok(obj) if obj.id() == ObjType::Closure => {
                 let closure = obj.as_closure_mut().expect("Expected closure obj");
                 Vm::call(closure, arg_count)
@@ -375,6 +386,47 @@ impl Vm {
             }
 
             match instruction.into() {
+                OpCode::GetProperty => {
+                    let instance = Vm::peek(0);
+                    let instance = instance.as_obj().expect("Expected Object value.");
+                    let Some(instance) = instance.as_instance() else {
+                       return Vm::runtime_error("Only instances have properties.");
+                    };
+                    let mut name = Vm::read_constant(frame);
+                    let name = name
+                        .as_obj_mut()
+                        .expect("Expected object value.")
+                        .as_string_mut()
+                        .unwrap();
+                    if let Some(value) = instance.fields.get(&(name as *mut ObjString)) {
+                        Vm::pop(); // Instance.
+                        Vm::push(*value);
+                    } else {
+                        Vm::runtime_error(&format!("Undefined property '{}'", name))?;
+                    }
+                }
+                OpCode::SetProperty => {
+                    let mut instance = Vm::peek(1);
+                    let instance = instance.as_obj_mut().expect("Expected Obj Value");
+                    let Some(instance) = instance.as_instance_mut() else {
+                        return Vm::runtime_error("Only instances have fields.");
+                    };
+                    let mut name = Vm::read_constant(frame);
+                    let name = name
+                        .as_obj_mut()
+                        .expect("Expect object value.")
+                        .as_string_mut()
+                        .expect("Expected string");
+                    instance.fields.insert(name as *mut ObjString, Vm::peek(0));
+                    let value = Vm::pop();
+                    Vm::pop();
+                    Vm::push(value);
+                }
+                OpCode::Class => {
+                    let mut name = Vm::read_constant(frame);
+                    let name = name.as_obj_mut().unwrap().as_string_mut().unwrap();
+                    Vm::push(ObjClass::new(name) as *mut dyn Obj);
+                }
                 OpCode::CloseUpvalue => {
                     Vm::close_upvalue(unsafe { VM.stack_top.sub(1) });
                     Vm::pop();

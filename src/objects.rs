@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fmt::{Debug, Display},
     pin::Pin,
 };
@@ -34,6 +35,18 @@ pub trait Obj: Debug + Display + Unpin {
     fn as_closure_mut(&mut self) -> Option<&mut ObjClosure> {
         None
     }
+    fn as_class(&self) -> Option<&ObjClass> {
+        None
+    }
+    fn as_class_mut(&mut self) -> Option<&mut ObjClass> {
+        None
+    }
+    fn as_instance(&self) -> Option<&ObjInstance> {
+        None
+    }
+    fn as_instance_mut(&mut self) -> Option<&mut ObjInstance> {
+        None
+    }
     fn as_upvalue(&self) -> Option<&ObjUpvalue> {
         None
     }
@@ -51,7 +64,8 @@ pub enum ObjType {
     String,
     Closure,
     Upvalue,
-    None,
+    Class,
+    Instance,
 }
 #[derive(Debug)]
 pub struct ObjClosure {
@@ -110,6 +124,89 @@ impl Obj for ObjClosure {
         Some(self)
     }
     fn as_closure_mut(&mut self) -> Option<&mut ObjClosure> {
+        Some(self)
+    }
+}
+#[derive(Debug)]
+pub struct ObjClass {
+    pub name: *mut ObjString,
+    pub is_marked: bool,
+}
+impl ObjClass {
+    pub fn new(name: *mut ObjString) -> *mut Self {
+        Vm::allocate_obj(Self {
+            name,
+            is_marked: false,
+        }) as *mut Self
+    }
+}
+impl Display for ObjClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", unsafe { self.name.as_ref().unwrap() })
+    }
+}
+impl Obj for ObjClass {
+    fn id(&self) -> ObjType {
+        ObjType::Class
+    }
+    fn is_marked(&self) -> bool {
+        self.is_marked
+    }
+    fn set_mark(&mut self, mark: bool) {
+        self.is_marked = mark;
+    }
+    fn as_rstring(&self) -> &str {
+        "class"
+    }
+    fn as_class(&self) -> Option<&ObjClass> {
+        Some(self)
+    }
+    fn as_class_mut(&mut self) -> Option<&mut ObjClass> {
+        Some(self)
+    }
+}
+#[derive(Debug)]
+pub struct ObjInstance {
+    pub klass: *mut ObjClass,
+    pub fields: HashMap<*mut ObjString, Value>,
+    pub is_marked: bool,
+}
+impl ObjInstance {
+    pub fn new(klass: *mut ObjClass) -> *mut Self {
+        Vm::allocate_obj(Self {
+            klass,
+            fields: HashMap::new(),
+            is_marked: false,
+        }) as *mut Self
+    }
+}
+impl Display for ObjInstance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let klass = unsafe {
+            self.klass
+                .as_ref()
+                .expect("Uninitialized class in instance.")
+        };
+        write!(f, "{} instance", klass)
+    }
+}
+impl Obj for ObjInstance {
+    fn id(&self) -> ObjType {
+        ObjType::Instance
+    }
+    fn set_mark(&mut self, mark: bool) {
+        self.is_marked = mark;
+    }
+    fn is_marked(&self) -> bool {
+        self.is_marked
+    }
+    fn as_rstring(&self) -> &str {
+        ""
+    }
+    fn as_instance(&self) -> Option<&ObjInstance> {
+        Some(self)
+    }
+    fn as_instance_mut(&mut self) -> Option<&mut ObjInstance> {
         Some(self)
     }
 }
@@ -223,13 +320,23 @@ impl PartialEq for ObjString {
 }
 impl ObjString {
     pub fn new(string: &str) -> Pin<Box<Self>> {
-        Box::pin(ObjString {
+        let obj = ObjString {
             chars: string.chars().fold(Vec::new(), |mut v, c| {
                 v.push(c as u8);
                 v
             }),
             is_marked: false,
-        })
+        };
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "log_gc")] {
+                let size = std::alloc::Layout::for_value(&obj).size();
+                let obj = Box::pin(obj);
+                println!("{:p} allocate {} for {:?}", &obj, size, obj.as_ref().id());
+                obj
+            } else {
+                Box::pin(obj)
+            }
+        }
     }
 
     pub fn concat(a: &str, b: &str) -> Self {
@@ -366,3 +473,5 @@ log_gc!(ObjFunction);
 log_gc!(ObjNative);
 log_gc!(ObjString);
 log_gc!(ObjUpvalue);
+log_gc!(ObjClass);
+log_gc!(ObjInstance);

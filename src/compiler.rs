@@ -586,6 +586,18 @@ mod compiler_functions {
         Ok(())
     }
 
+    pub(super) fn dot(parser: &mut Parser, can_assign: bool) -> Result<()> {
+        parser.consume(TokenType::Identifier, "Expect property name after '.'.")?;
+        let name = parser.identifier_constant(parser.previous);
+
+        if can_assign && parser.matches(TokenType::Equal)? {
+            expression(parser);
+            parser.emit_bytes(OpCode::SetProperty, name);
+        } else {
+            parser.emit_bytes(OpCode::GetProperty, name);
+        }
+        Ok(())
+    }
     pub(super) fn literal(parser: &mut Parser, _: bool) -> Result<()> {
         parser.emit_byte(match parser.previous.id {
             TokenType::False => OpCode::False,
@@ -661,7 +673,17 @@ mod compiler_functions {
         parser.define_variable(global);
         Ok(())
     }
+    pub(super) fn class_declaration(parser: &mut Parser) -> Result<()> {
+        parser.consume(TokenType::Identifier, "Expected class name.")?;
+        let name_constatnt = parser.identifier_constant(parser.previous);
+        parser.declare_variable()?;
 
+        parser.emit_bytes(OpCode::Class, name_constatnt);
+        parser.define_variable(name_constatnt);
+
+        parser.consume(TokenType::LeftBrace, "Expect '{' befor class body.")?;
+        parser.consume(TokenType::RightBrace, "Expect '}' after class body.")
+    }
     pub(super) fn var_declaration(parser: &mut Parser) -> Result<()> {
         let global = parser.parse_variable("Expect variable name.")?;
 
@@ -784,7 +806,9 @@ mod compiler_functions {
         Ok(())
     }
     pub(super) fn declaration(parser: &mut Parser) {
-        let n = if let Ok(true) = parser.matches(TokenType::Fun) {
+        let n = if let Ok(true) = parser.matches(TokenType::Class) {
+            class_declaration(parser)
+        } else if let Ok(true) = parser.matches(TokenType::Fun) {
             fun_declaration(parser)
         } else if let Ok(true) = parser.matches(TokenType::Var) {
             var_declaration(parser)
@@ -859,7 +883,7 @@ mod rule {
         define!(TokenType::LeftBrace   , None          , None        , Precedence::None      ),
         define!(TokenType::RightBrace  , None          , None        , Precedence::None      ),
         define!(TokenType::Comma       , None          , None        , Precedence::None      ),
-        define!(TokenType::Dot         , None          , None        , Precedence::None      ),
+        define!(TokenType::Dot         , None          , Some(dot)   , Precedence::Call      ),
         define!(TokenType::Minus       , Some(unary)   , Some(binary), Precedence::Term      ),
         define!(TokenType::Plus        , None          , Some(binary), Precedence::Term      ),
         define!(TokenType::Semicolon   , None          , None        , Precedence::None      ),
@@ -896,7 +920,7 @@ mod rule {
         define!(TokenType::EOF         , None          , None        , Precedence::None      ),
     ];
     use super::{
-        binary, call, grouping, literal, number, r#and, r#or, string, unary, variable, Parser,
+        binary, call, dot, grouping, literal, number, r#and, r#or, string, unary, variable, Parser,
     };
     use crate::scanner::TokenType;
     pub(super) type ParseFn = fn(&mut Parser, bool) -> super::Result<()>;

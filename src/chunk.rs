@@ -199,7 +199,13 @@ impl Ip {
         let op: OpCode = unsafe { self.current.sub(1).read().into() };
         match op {
             // constantInstruction
-            OpCode::Constant | OpCode::DefineGlobal | OpCode::GetGlobal | OpCode::SetGlobal => {
+            OpCode::Constant
+            | OpCode::DefineGlobal
+            | OpCode::GetGlobal
+            | OpCode::SetGlobal
+            | OpCode::Class
+            | OpCode::GetProperty
+            | OpCode::SetProperty => {
                 let n = self.peek().unwrap();
                 let m = unsafe { self.get_constant(n) };
                 (format!("{} {:<9}{} '{}'", op, " ", n, m), 1)
@@ -358,6 +364,9 @@ mod opcode {
         GetUpvalue,
         SetUpvalue,
         CloseUpvalue,
+        Class,
+        GetProperty,
+        SetProperty,
     }
     macro_rules! from_and_into {
         ( $( $code: tt, $name: tt, $value: literal),*) => {
@@ -484,6 +493,15 @@ mod opcode {
         27,
         CloseUpvalue,
         "CLOSE_UPVALUE",
-        28
+        28,
+        Class,
+        "CLASS",
+        29,
+        GetProperty,
+        "GET_PROPERTY",
+        30,
+        SetProperty,
+        "SET_PROPERTY",
+        31
     );
 }
