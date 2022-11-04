@@ -1,6 +1,6 @@
 use std::{fmt::Debug, pin::Pin, ptr};
 
-use crate::value::Value;
+use crate::{value::Value, vm::Vm};
 #[derive(Debug)]
 pub struct Lines {
     /// (line number, count)
@@ -40,7 +40,7 @@ const NAME_LEN: usize = 250;
 pub struct Chunk {
     pub code: Vec<u8>,
     lines: Lines,
-    constants: Vec<Value>,
+    pub constants: Vec<Value>,
     name: [u8; NAME_LEN],
 }
 impl Chunk {
@@ -81,7 +81,9 @@ impl Chunk {
     }
 
     pub fn constant(&mut self, val: Value) -> u8 {
+        Vm::push(val);
         self.constants.push(val);
+        Vm::pop();
         (self.constants.len() - 1) as u8
     }
 

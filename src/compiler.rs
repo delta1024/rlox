@@ -2,6 +2,7 @@ pub use crate::error::ParserError as Error;
 use crate::{
     chunk::{Chunk, OpCode},
     error::CompilerError,
+    memory::GarbageCollector,
     objects::{allocate_string, Obj, ObjFunction, ObjString},
     scanner::{self, Scanner, Token, TokenType},
     value::Value,
@@ -16,6 +17,7 @@ enum FunctionType {
     Function,
     Script,
 }
+static mut COMPILER: *mut Compiler = std::ptr::null_mut();
 struct Compiler {
     function: *mut ObjFunction,
     enclosing: *mut Compiler,
@@ -27,7 +29,7 @@ struct Compiler {
 }
 
 impl Compiler {
-    fn new(id: FunctionType, enclosing: *mut Compiler, name: *const ObjString) -> Compiler {
+    fn new(id: FunctionType, enclosing: *mut Compiler, name: *mut ObjString) -> Compiler {
         let m = if id != FunctionType::Script {
             ObjFunction::new(name)
         } else {
@@ -166,7 +168,6 @@ struct Parser<'b> {
     current: Token,
     had_error: Result<()>,
     scanner: &'b mut Scanner<'b>,
-    compiler: *mut Compiler,
 }
 
 impl<'b> Parser<'b> {
@@ -177,16 +178,18 @@ impl<'b> Parser<'b> {
             length: 0,
             line: 0,
         };
+        unsafe {
+            COMPILER = compiler;
+        }
         Parser {
             previous: null,
             current: null,
             scanner,
             had_error: Ok(()),
-            compiler,
         }
     }
     fn compiler(&mut self) -> &mut Compiler {
-        unsafe { self.compiler.as_mut().unwrap() }
+        unsafe { COMPILER.as_mut().unwrap() }
     }
     fn current_chunk(&mut self) -> &mut Chunk {
         let function = self.compiler().function();
@@ -343,8 +346,8 @@ impl<'b> Parser<'b> {
             println!("{:?}", self.current_chunk());
         }
         let function = self.compiler().function;
-        let compiler = self.compiler;
-        self.compiler = self.compiler().enclosing;
+        let compiler = unsafe { COMPILER };
+        unsafe { COMPILER = self.compiler().enclosing };
         (compiler, function)
     }
 
@@ -485,11 +488,12 @@ impl<'b> Parser<'b> {
 use compiler_functions::*;
 
 mod compiler_functions {
-    use super::{rule::get_rule, Compiler, FunctionType, Parser, Precedence, Result};
+    use super::{rule::get_rule, Compiler, FunctionType, Parser, Precedence, Result, COMPILER};
     use crate::{
         chunk::OpCode,
         objects::{allocate_string, Obj},
         scanner::TokenType,
+        vm::Vm,
     };
 
     pub(super) fn r#and(parser: &mut Parser, _: bool) -> Result<()> {
@@ -604,9 +608,9 @@ mod compiler_functions {
     }
     pub(super) fn function(parser: &mut Parser, id: FunctionType) -> Result<()> {
         let string = allocate_string(parser.previous.extract());
-        let string = unsafe { string.as_ref().unwrap().as_string().unwrap() };
-        let mut compiler = Compiler::new(id, parser.compiler, string);
-        parser.compiler = &mut compiler;
+        let string = unsafe { string.as_mut().unwrap().as_string_mut().unwrap() };
+        let mut compiler = Compiler::new(id, unsafe { COMPILER }, string);
+        unsafe { COMPILER = &mut compiler };
         parser.begin_scope();
 
         parser.consume(TokenType::LeftParen, "Expect '(' after funciton name.")?;
@@ -629,9 +633,10 @@ mod compiler_functions {
         parser.consume(TokenType::LeftBrace, "Expect '{' befor funciton body.")?;
         block(parser)?;
         let (compiler, function) = parser.end_compiler();
+        Vm::push(function as *mut dyn Obj);
         let constant = parser.make_constant(function as *mut dyn Obj);
+        Vm::pop();
         parser.emit_bytes(OpCode::Closure, constant);
-        dbg!(unsafe { function.as_ref().unwrap().upvalue_count });
         for i in 0..unsafe {
             function
                 .as_ref()
@@ -814,7 +819,7 @@ mod compiler_functions {
 }
 
 pub fn compile(source: &str) -> Result<*mut ObjFunction> {
-    let mut compiler = Compiler::new(FunctionType::Script, ptr::null_mut(), ptr::null());
+    let mut compiler = Compiler::new(FunctionType::Script, ptr::null_mut(), ptr::null_mut());
     let mut scanner = Scanner::new(source);
     let mut parser = Parser::new(&mut scanner, &mut compiler);
     parser.advance()?;
@@ -829,6 +834,14 @@ pub fn compile(source: &str) -> Result<*mut ObjFunction> {
     }
 }
 
+pub unsafe fn mark_compiler_roots() {
+    let mut compiler = COMPILER;
+    while !compiler.is_null() {
+        let com = compiler.as_mut().unwrap();
+        GarbageCollector::mark_obj(com.function);
+        compiler = com.enclosing;
+    }
+}
 mod rule {
     macro_rules! define {
         ($_:ty, $prefix:expr, $infix:expr, $precedence:expr) => {

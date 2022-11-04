@@ -6,16 +6,23 @@ mod objects;
 mod scanner;
 mod value;
 mod vm;
-use memory::GarbageCollector;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "trace_execution")] {
+        // Do nothing
+    } else if #[cfg(feature = "print_code")] {
+        // Do nothing
+    } else {
+        use memory::GarbageCollector;
+        #[global_allocator]
+        static GLOBAL: GarbageCollector = GarbageCollector;
+    }
+}
 use std::{
     env,
     fs::File,
     io::{self, Read, Write},
     process::exit,
 };
-
-#[global_allocator]
-static GLOBAL: GarbageCollector = GarbageCollector;
 
 fn repl() -> io::Result<()> {
     loop {
@@ -54,11 +61,13 @@ fn main() -> io::Result<()> {
         (args, n)
     };
     if argc == 1 {
-        repl()
+        repl()?;
     } else if argc == 2 {
-        run_file(&argv[1])
+        run_file(&argv[1])?;
     } else {
         eprintln!("Usage: rlox [path]");
         exit(64);
     }
+    vm::Vm::free_vm();
+    Ok(())
 }

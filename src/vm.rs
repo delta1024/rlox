@@ -7,14 +7,33 @@ use crate::{
     },
     value::Value,
 };
+#[cfg(feature = "log_gc")]
+use std::alloc::Layout;
 use std::{
     collections::{HashMap, LinkedList},
     pin::Pin,
     ptr, result,
     time::SystemTime,
 };
+const GC_START_THRESHOLD: usize = 1024 * 1024;
+const FRAMES_MAX: usize = 64;
+const STACK_MAX: usize = FRAMES_MAX * u8::MAX as usize;
+pub type Result<T> = result::Result<T, Error>;
 
-pub static mut VM: Vm = Vm::new();
+pub static mut VM: Vm = Vm {
+    frames: [CallFrame::new(); FRAMES_MAX],
+    frame_count: 0,
+    stack: [Value::Null; STACK_MAX],
+    stack_top: ptr::null_mut(),
+    objects: Some(LinkedList::new()),
+    strings: None,
+    globals: None,
+    open_upvalues: ptr::null_mut(),
+    gray_stack: None,
+    bytes_allocated: 0,
+    next_gc: GC_START_THRESHOLD,
+};
+
 fn clock_native(_: &[Value]) -> Value {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -22,63 +41,59 @@ fn clock_native(_: &[Value]) -> Value {
         .as_secs_f64()
         .into()
 }
-pub type Result<T> = result::Result<T, Error>;
-const FRAMES_MAX: usize = 64;
-const STACK_MAX: usize = FRAMES_MAX * u8::MAX as usize;
 
 #[derive(Clone, Copy)]
-struct CallFrame {
-    closure: *const ObjClosure,
-    ip: Ip,
-    slots: *mut Value,
+pub struct CallFrame {
+    pub closure: *mut ObjClosure,
+    pub ip: Ip,
+    pub slots: *mut Value,
 }
 impl CallFrame {
     const fn new() -> CallFrame {
         CallFrame {
-            closure: ptr::null(),
+            closure: ptr::null_mut(),
             ip: Ip::null(),
             slots: ptr::null_mut(),
         }
     }
 
-    fn slots(&self) -> &mut [Value] {
+    pub fn slots(&self) -> &mut [Value] {
         let offset = unsafe { self.slots.offset_from(&VM.stack[0]) };
         let remaining = STACK_MAX - offset as usize;
         unsafe { std::slice::from_raw_parts_mut(self.slots, remaining) }
     }
-    fn closure(&self) -> &ObjClosure {
+    pub fn closure(&self) -> &mut ObjClosure {
         unsafe {
             self.closure
-                .as_ref()
+                .as_mut()
                 .expect("Uninitialized closure in call frame.")
         }
     }
 }
 pub struct Vm {
-    frames: [CallFrame; FRAMES_MAX],
-    frame_count: usize,
-    stack: [Value; STACK_MAX],
-    stack_top: *mut Value,
-    _objects: LinkedList<Pin<Box<dyn Obj>>>,
+    pub frames: [CallFrame; FRAMES_MAX],
+    pub frame_count: usize,
+    pub stack: [Value; STACK_MAX],
+    pub stack_top: *mut Value,
+    pub gray_stack: Option<Vec<&'static mut dyn Obj>>,
+    pub objects: Option<LinkedList<Pin<Box<dyn Obj>>>>,
     pub strings: Option<HashMap<String, Pin<Box<ObjString>>>>,
-    pub globals: Option<HashMap<String, Value>>,
+    pub globals: Option<HashMap<*mut ObjString, Value>>,
+    pub bytes_allocated: usize,
+    pub next_gc: usize,
     pub open_upvalues: *mut ObjUpvalue,
 }
 
 impl Vm {
-    const fn new() -> Vm {
-        Vm {
-            frames: [CallFrame::new(); FRAMES_MAX],
-            frame_count: 0,
-            stack: [Value::Null; STACK_MAX],
-            stack_top: ptr::null_mut(),
-            _objects: LinkedList::new(),
-            strings: None,
-            globals: None,
-            open_upvalues: ptr::null_mut(),
+    pub fn free_vm() {
+        unsafe {
+            _ = VM.objects.take();
+            _ = VM.strings.take();
+            _ = VM.globals.take();
+            #[cfg(feature = "log_gc")]
+            println!("bytes allocated: {}", VM.bytes_allocated);
         }
     }
-
     pub fn init_vm() {
         Vm::reset_stack();
         unsafe {
@@ -104,7 +119,7 @@ impl Vm {
     pub fn peek(distance: isize) -> Value {
         unsafe { VM.stack_top.offset(-1 - distance).read() }
     }
-    fn call(closure: &ObjClosure, arg_count: u32) -> Result<()> {
+    fn call(closure: &mut ObjClosure, arg_count: u32) -> Result<()> {
         if arg_count != closure.function().arity {
             Vm::runtime_error(&format!(
                 "Expected {} arguments but got {}",
@@ -126,10 +141,10 @@ impl Vm {
 
         Ok(())
     }
-    pub fn call_value(callee: Value, arg_count: u32) -> Result<()> {
-        match callee.as_obj() {
+    pub fn call_value(mut callee: Value, arg_count: u32) -> Result<()> {
+        match callee.as_obj_mut() {
             Ok(obj) if obj.id() == ObjType::Closure => {
-                let closure = obj.as_closure().expect("Expected closure obj");
+                let closure = obj.as_closure_mut().expect("Expected closure obj");
                 Vm::call(closure, arg_count)
             }
             Ok(obj) if obj.id() == ObjType::Native => {
@@ -191,15 +206,33 @@ impl Vm {
     }
     pub fn reset_stack() {
         unsafe {
+            VM.open_upvalues = ptr::null_mut();
             VM.stack_top = VM.stack.as_mut_ptr();
             VM.frame_count = 0;
         }
     }
     pub fn allocate_obj<T: Obj + 'static>(obj: T) -> *mut dyn Obj {
+        #[cfg(feature = "log_gc")]
+        let layout = Layout::for_value(&obj);
         unsafe {
-            VM._objects.push_back(Box::pin(obj));
-            let n = VM._objects.back_mut().unwrap().as_mut();
-            let n: *mut dyn Obj = Pin::get_mut(n);
+            VM.objects
+                .as_mut()
+                .expect("uninitialized vm")
+                .push_back(Box::pin(obj));
+            let m = VM
+                .objects
+                .as_mut()
+                .expect("uninitialized vm")
+                .back_mut()
+                .unwrap()
+                .as_mut();
+            #[cfg(feature = "log_gc")]
+            let id = m.id();
+            let n: *mut dyn Obj = Pin::get_mut(m);
+            #[cfg(feature = "log_gc")]
+            {
+                println!("{:?} allocate {} for {:?}", n, layout.size(), id);
+            }
             n
         }
     }
@@ -237,7 +270,7 @@ impl Vm {
         Vm::push(ObjNative::new(function) as *mut dyn Obj);
         unsafe {
             VM.globals.as_mut().unwrap().insert(
-                VM.stack[0].as_obj().unwrap().as_rstring().to_owned(),
+                VM.stack[0].as_obj_mut().unwrap().as_string_mut().unwrap(),
                 VM.stack[1],
             );
         }
@@ -313,12 +346,14 @@ impl Vm {
         Ok(())
     }
     fn concatenate() {
-        let b = Vm::pop();
+        let b = Vm::peek(0);
         let b = b.as_obj().unwrap().as_rstring();
-        let a = Vm::pop();
+        let a = Vm::peek(1);
         let a = a.as_obj().unwrap().as_rstring();
         let c = ObjString::concat(a, b);
         let c = crate::objects::allocate_string(c.as_rstring()) as *mut dyn Obj;
+        Vm::pop();
+        Vm::pop();
         Vm::push(c);
     }
     fn run() -> Result<()> {
@@ -452,7 +487,7 @@ impl Vm {
                         (n, m)
                     };
 
-                    if is_obj.0 == true && is_obj.1 == true {
+                    if is_obj.0 && is_obj.1 {
                         let a = a.as_obj().unwrap().id();
                         let b = b.as_obj().unwrap().id();
                         if a == ObjType::String && b == ObjType::String {
@@ -465,27 +500,29 @@ impl Vm {
                     }
                 }
                 OpCode::DefineGlobal => {
-                    let name = Vm::read_constant(frame);
-                    let name = name.as_obj().unwrap().as_rstring();
+                    let mut name = Vm::read_constant(frame);
+                    let name = name.as_obj_mut().unwrap().as_string_mut().unwrap();
                     let table = unsafe { VM.globals.as_mut().unwrap() };
-                    table.insert(name.to_owned(), Vm::peek(0));
+                    table.insert(name, Vm::peek(0));
                     Vm::pop();
                 }
                 OpCode::GetGlobal => {
-                    let name = Vm::read_constant(frame);
-                    let name = name.as_obj().unwrap().as_rstring();
-                    if let Some(value) = unsafe { VM.globals.as_mut().unwrap().get(name) } {
+                    let mut name = Vm::read_constant(frame);
+                    let name = name.as_obj_mut().unwrap().as_string_mut().unwrap();
+                    if let Some(value) =
+                        unsafe { VM.globals.as_mut().unwrap().get(&(name as *mut ObjString)) }
+                    {
                         Vm::push(*value);
                     } else {
                         return Vm::runtime_error(&format!("Undefine variable '{}'.", name));
                     }
                 }
                 OpCode::SetGlobal => {
-                    let name = Vm::read_constant(frame);
-                    let name = name.as_obj().unwrap().as_rstring();
+                    let mut name = Vm::read_constant(frame);
+                    let name = name.as_obj_mut().unwrap().as_string_mut().unwrap();
                     let table = unsafe { VM.globals.as_mut().unwrap() };
-                    if let None = table.insert(name.to_owned(), Vm::peek(0)) {
-                        table.remove(name);
+                    if let None = table.insert(name, Vm::peek(0)) {
+                        table.remove(&(name as *mut ObjString));
                         return Vm::runtime_error(&format!("Undefined variable '{}'", name));
                     }
                 }

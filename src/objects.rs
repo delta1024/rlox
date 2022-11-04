@@ -12,6 +12,10 @@ pub trait Obj: Debug + Display + Unpin {
         None
     }
 
+    fn as_string_mut(&mut self) -> Option<&mut ObjString> {
+        None
+    }
+
     fn as_native(&self) -> Option<&ObjNative> {
         None
     }
@@ -33,6 +37,11 @@ pub trait Obj: Debug + Display + Unpin {
     fn as_upvalue(&self) -> Option<&ObjUpvalue> {
         None
     }
+    fn as_upvalue_mut(&mut self) -> Option<&mut ObjUpvalue> {
+        None
+    }
+    fn set_mark(&mut self, mark: bool);
+    fn is_marked(&self) -> bool;
 }
 
 #[derive(PartialEq, Debug)]
@@ -49,6 +58,7 @@ pub struct ObjClosure {
     pub function: *mut ObjFunction,
     pub upvalues: Vec<*mut ObjUpvalue>,
     pub upvalue_count: usize,
+    pub is_marked: bool,
 }
 
 impl ObjClosure {
@@ -60,6 +70,7 @@ impl ObjClosure {
             function,
             upvalues,
             upvalue_count,
+            is_marked: false,
         }) as *mut ObjClosure
     }
     pub fn function(&self) -> &ObjFunction {
@@ -86,6 +97,12 @@ impl Obj for ObjClosure {
     fn id(&self) -> ObjType {
         ObjType::Closure
     }
+    fn set_mark(&mut self, mark: bool) {
+        self.is_marked = mark;
+    }
+    fn is_marked(&self) -> bool {
+        self.is_marked
+    }
     fn as_rstring(&self) -> &str {
         todo!()
     }
@@ -100,16 +117,18 @@ impl Obj for ObjClosure {
 pub struct ObjFunction {
     pub arity: u32,
     pub chunk: Chunk,
-    pub name: *const ObjString,
+    pub name: *mut ObjString,
     pub upvalue_count: u32,
+    pub is_marked: bool,
 }
 impl ObjFunction {
-    pub fn new(name: *const ObjString) -> *mut ObjFunction {
+    pub fn new(name: *mut ObjString) -> *mut ObjFunction {
         let function = ObjFunction {
             arity: 0,
             chunk: Chunk::new(),
             name,
             upvalue_count: 0,
+            is_marked: false,
         };
         Vm::allocate_obj(function) as *mut ObjFunction
     }
@@ -124,6 +143,12 @@ impl Obj for ObjFunction {
         ObjType::Function
     }
 
+    fn set_mark(&mut self, mark: bool) {
+        self.is_marked = mark;
+    }
+    fn is_marked(&self) -> bool {
+        self.is_marked
+    }
     fn as_function_mut(&mut self) -> Option<&mut ObjFunction> {
         Some(self)
     }
@@ -141,11 +166,15 @@ impl Obj for ObjFunction {
 pub type NativeFn = fn(args: &[Value]) -> Value;
 pub struct ObjNative {
     pub function: NativeFn,
+    pub is_marked: bool,
 }
 
 impl ObjNative {
     pub fn new(function: NativeFn) -> *mut dyn Obj {
-        Vm::allocate_obj(ObjNative { function })
+        Vm::allocate_obj(ObjNative {
+            function,
+            is_marked: false,
+        })
     }
 }
 
@@ -171,11 +200,18 @@ impl Obj for ObjNative {
     fn as_native(&self) -> Option<&ObjNative> {
         Some(self)
     }
+    fn set_mark(&mut self, mark: bool) {
+        self.is_marked = mark;
+    }
+    fn is_marked(&self) -> bool {
+        self.is_marked
+    }
 }
 
 #[derive(Debug, Eq, Hash, PartialOrd, Ord)]
 pub struct ObjString {
     chars: Vec<u8>,
+    is_marked: bool,
 }
 
 impl PartialEq for ObjString {
@@ -192,6 +228,7 @@ impl ObjString {
                 v.push(c as u8);
                 v
             }),
+            is_marked: false,
         })
     }
 
@@ -208,7 +245,10 @@ impl ObjString {
         for i in b {
             n.push(i as u8);
         }
-        ObjString { chars: n }
+        ObjString {
+            chars: n,
+            is_marked: false,
+        }
     }
 }
 
@@ -227,9 +267,18 @@ impl Obj for ObjString {
         Some(self)
     }
 
+    fn set_mark(&mut self, mark: bool) {
+        self.is_marked = mark;
+    }
     fn as_rstring(&self) -> &str {
         let slice = &self.chars[..self.chars.len()];
         std::str::from_utf8(slice).unwrap()
+    }
+    fn as_string_mut(&mut self) -> Option<&mut ObjString> {
+        Some(self)
+    }
+    fn is_marked(&self) -> bool {
+        self.is_marked
     }
 }
 pub fn allocate_string(key: &str) -> *mut ObjString {
@@ -242,7 +291,11 @@ pub fn allocate_string(key: &str) -> *mut ObjString {
         let n = Pin::get_mut(string.as_mut());
         n
     } else {
-        table.insert(key.to_string(), ObjString::new(key));
+        let mut object = ObjString::new(key);
+        let n = Pin::get_mut(object.as_mut());
+        Vm::push(n as *mut dyn Obj);
+        table.insert(key.to_string(), object);
+        Vm::pop();
         let n = table.get_mut(key).unwrap();
         let n = Pin::get_mut(n.as_mut());
         n
@@ -254,6 +307,7 @@ pub struct ObjUpvalue {
     pub location: *mut Value,
     pub closed: Value,
     pub next: *mut ObjUpvalue,
+    pub is_marked: bool,
 }
 
 impl ObjUpvalue {
@@ -262,6 +316,7 @@ impl ObjUpvalue {
             location: slot,
             closed: Value::Null,
             next: std::ptr::null_mut(),
+            is_marked: false,
         }) as *mut ObjUpvalue
     }
 }
@@ -277,6 +332,9 @@ impl Obj for ObjUpvalue {
         ObjType::Upvalue
     }
 
+    fn set_mark(&mut self, mark: bool) {
+        self.is_marked = mark;
+    }
     fn as_rstring(&self) -> &str {
         "upvalue"
     }
@@ -284,4 +342,27 @@ impl Obj for ObjUpvalue {
     fn as_upvalue(&self) -> Option<&ObjUpvalue> {
         Some(self)
     }
+    fn as_upvalue_mut(&mut self) -> Option<&mut ObjUpvalue> {
+        Some(self)
+    }
+    fn is_marked(&self) -> bool {
+        self.is_marked
+    }
 }
+
+macro_rules! log_gc {
+    ($obj:tt) => {
+        #[cfg(feature = "log_gc")]
+        impl Drop for $obj {
+            fn drop(&mut self) {
+                println!("{:p} free type {:?}", self, self.id());
+            }
+        }
+    };
+}
+
+log_gc!(ObjClosure);
+log_gc!(ObjFunction);
+log_gc!(ObjNative);
+log_gc!(ObjString);
+log_gc!(ObjUpvalue);
