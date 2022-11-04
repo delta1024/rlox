@@ -8,7 +8,9 @@ use crate::{chunk::Chunk, value::Value, vm::Vm};
 
 pub trait Obj: Debug + Display + Unpin {
     fn id(&self) -> ObjType;
-    fn as_rstring(&self) -> &str;
+    fn as_rstring(&self) -> &str {
+        ""
+    }
     fn as_string(&self) -> Option<&ObjString> {
         None
     }
@@ -53,6 +55,12 @@ pub trait Obj: Debug + Display + Unpin {
     fn as_upvalue_mut(&mut self) -> Option<&mut ObjUpvalue> {
         None
     }
+    fn as_bound_method(&self) -> Option<&ObjBoundMethod> {
+        None
+    }
+    fn as_bound_method_mut(&mut self) -> Option<&mut ObjBoundMethod> {
+        None
+    }
     fn set_mark(&mut self, mark: bool);
     fn is_marked(&self) -> bool;
 }
@@ -66,6 +74,7 @@ pub enum ObjType {
     Upvalue,
     Class,
     Instance,
+    BoundMethod,
 }
 #[derive(Debug)]
 pub struct ObjClosure {
@@ -117,9 +126,7 @@ impl Obj for ObjClosure {
     fn is_marked(&self) -> bool {
         self.is_marked
     }
-    fn as_rstring(&self) -> &str {
-        todo!()
-    }
+
     fn as_closure(&self) -> Option<&ObjClosure> {
         Some(self)
     }
@@ -131,12 +138,14 @@ impl Obj for ObjClosure {
 pub struct ObjClass {
     pub name: *mut ObjString,
     pub is_marked: bool,
+    pub methods: HashMap<*mut ObjString, Value>,
 }
 impl ObjClass {
     pub fn new(name: *mut ObjString) -> *mut Self {
         Vm::allocate_obj(Self {
             name,
             is_marked: false,
+            methods: HashMap::new(),
         }) as *mut Self
     }
 }
@@ -154,9 +163,6 @@ impl Obj for ObjClass {
     }
     fn set_mark(&mut self, mark: bool) {
         self.is_marked = mark;
-    }
-    fn as_rstring(&self) -> &str {
-        "class"
     }
     fn as_class(&self) -> Option<&ObjClass> {
         Some(self)
@@ -200,13 +206,57 @@ impl Obj for ObjInstance {
     fn is_marked(&self) -> bool {
         self.is_marked
     }
-    fn as_rstring(&self) -> &str {
-        ""
-    }
     fn as_instance(&self) -> Option<&ObjInstance> {
         Some(self)
     }
     fn as_instance_mut(&mut self) -> Option<&mut ObjInstance> {
+        Some(self)
+    }
+}
+#[derive(Debug)]
+pub struct ObjBoundMethod {
+    pub reciever: Value,
+    pub method: *mut ObjClosure,
+    pub is_marked: bool,
+}
+impl ObjBoundMethod {
+    pub fn new(reciever: Value, method: *mut ObjClosure) -> *mut Self {
+        Vm::allocate_obj(Self {
+            reciever,
+            method,
+            is_marked: false,
+        }) as *mut Self
+    }
+}
+impl Display for ObjBoundMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let method = unsafe { self.method.as_ref().expect("Uninitialized method") };
+        write!(f, "{}", unsafe {
+            method
+                .function
+                .as_ref()
+                .expect("uninitialized function in object.")
+        })
+    }
+}
+impl Obj for ObjBoundMethod {
+    fn id(&self) -> ObjType {
+        ObjType::BoundMethod
+    }
+
+    fn is_marked(&self) -> bool {
+        self.is_marked
+    }
+
+    fn set_mark(&mut self, mark: bool) {
+        self.is_marked = mark;
+    }
+
+    fn as_bound_method(&self) -> Option<&ObjBoundMethod> {
+        Some(self)
+    }
+
+    fn as_bound_method_mut(&mut self) -> Option<&mut ObjBoundMethod> {
         Some(self)
     }
 }
@@ -475,3 +525,4 @@ log_gc!(ObjString);
 log_gc!(ObjUpvalue);
 log_gc!(ObjClass);
 log_gc!(ObjInstance);
+log_gc!(ObjBoundMethod);

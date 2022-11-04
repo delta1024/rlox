@@ -12,12 +12,15 @@ pub type Result<T> = result::Result<T, Error>;
 type CmpResult<T> = result::Result<T, CompilerError>;
 use rule::{get_rule, Precedence};
 const U8_MAX: usize = u8::MAX as usize;
-#[derive(PartialEq, PartialOrd)]
+#[derive(PartialEq, PartialOrd, Clone, Copy)]
 enum FunctionType {
     Function,
     Script,
+    Method,
+    Initializer,
 }
 static mut COMPILER: *mut Compiler = std::ptr::null_mut();
+static mut CURRENT_CLASS: *mut ClassCompiler = std::ptr::null_mut();
 struct Compiler {
     function: *mut ObjFunction,
     enclosing: *mut Compiler,
@@ -47,7 +50,13 @@ impl Compiler {
         let local = &mut n.locals[n.local_count];
         n.local_count += 1;
         local.depth = 0;
-        local.name = Token::null();
+        if id != FunctionType::Function {
+            local.name.start = "this".as_ptr();
+            local.name.length = 4;
+        } else {
+            local.name.start = ptr::null();
+            local.name.length = 0;
+        }
 
         n
     }
@@ -127,6 +136,9 @@ impl Compiler {
     }
 }
 
+struct ClassCompiler {
+    enclosing: *mut ClassCompiler,
+}
 #[derive(Clone, Copy, Debug)]
 struct Local {
     name: Token,
@@ -320,7 +332,11 @@ impl<'b> Parser<'b> {
     }
 
     fn emit_return(&mut self) {
-        self.emit_byte(OpCode::Nil);
+        if self.compiler().id == FunctionType::Initializer {
+            self.emit_bytes(OpCode::GetLocal, 0);
+        } else {
+            self.emit_byte(OpCode::Nil);
+        }
         self.emit_byte(OpCode::Return);
     }
 
@@ -488,7 +504,10 @@ impl<'b> Parser<'b> {
 use compiler_functions::*;
 
 mod compiler_functions {
-    use super::{rule::get_rule, Compiler, FunctionType, Parser, Precedence, Result, COMPILER};
+    use super::{
+        rule::get_rule, ClassCompiler, Compiler, FunctionType, Parser, Precedence, Result,
+        COMPILER, CURRENT_CLASS,
+    };
     use crate::{
         chunk::OpCode,
         objects::{allocate_string, Obj},
@@ -530,6 +549,14 @@ mod compiler_functions {
         parser.named_variable(parser.previous, can_assign)
     }
 
+    pub(super) fn this(parser: &mut Parser, _: bool) -> Result<()> {
+        unsafe {
+            if CURRENT_CLASS.is_null() {
+                return parser.error("Can't use 'this' outside of a class.");
+            }
+        }
+        variable(parser, false)
+    }
     pub(super) fn grouping(parser: &mut Parser, _: bool) -> Result<()> {
         match expression(parser) {
             _ => parser.consume(TokenType::RightParen, "Expect ')' after expression"),
@@ -591,8 +618,12 @@ mod compiler_functions {
         let name = parser.identifier_constant(parser.previous);
 
         if can_assign && parser.matches(TokenType::Equal)? {
-            expression(parser);
+            expression(parser)?;
             parser.emit_bytes(OpCode::SetProperty, name);
+        } else if parser.matches(TokenType::LeftParen)? {
+            let arg_count = parser.argument_list()?;
+            parser.emit_bytes(OpCode::Invoke, name);
+            parser.emit_byte(arg_count);
         } else {
             parser.emit_bytes(OpCode::GetProperty, name);
         }
@@ -666,6 +697,17 @@ mod compiler_functions {
         }
         Ok(())
     }
+    pub(super) fn method(parser: &mut Parser) -> Result<()> {
+        parser.consume(TokenType::Identifier, "Expect method name.")?;
+        let constant = parser.identifier_constant(parser.previous);
+        let mut id = FunctionType::Method;
+        if parser.previous.extract() == "init" {
+            id = FunctionType::Initializer;
+        }
+        function(parser, id)?;
+        parser.emit_bytes(OpCode::Method, constant);
+        Ok(())
+    }
     pub(super) fn fun_declaration(parser: &mut Parser) -> Result<()> {
         let global = parser.parse_variable("Expect function name.")?;
         parser.compiler().mark_initialized();
@@ -675,14 +717,29 @@ mod compiler_functions {
     }
     pub(super) fn class_declaration(parser: &mut Parser) -> Result<()> {
         parser.consume(TokenType::Identifier, "Expected class name.")?;
+        let class_name = parser.previous;
         let name_constatnt = parser.identifier_constant(parser.previous);
         parser.declare_variable()?;
 
         parser.emit_bytes(OpCode::Class, name_constatnt);
         parser.define_variable(name_constatnt);
-
+        let mut class_compiler = ClassCompiler {
+            enclosing: unsafe { CURRENT_CLASS },
+        };
+        unsafe {
+            CURRENT_CLASS = &mut class_compiler;
+        }
+        parser.named_variable(class_name, false)?;
         parser.consume(TokenType::LeftBrace, "Expect '{' befor class body.")?;
-        parser.consume(TokenType::RightBrace, "Expect '}' after class body.")
+        while !parser.check(TokenType::RightBrace) && !parser.check(TokenType::EOF) {
+            method(parser)?;
+        }
+        parser.consume(TokenType::RightBrace, "Expect '}' after class body.")?;
+        parser.emit_byte(OpCode::Pop);
+        unsafe {
+            CURRENT_CLASS = CURRENT_CLASS.as_mut().unwrap().enclosing;
+        }
+        Ok(())
     }
     pub(super) fn var_declaration(parser: &mut Parser) -> Result<()> {
         let global = parser.parse_variable("Expect variable name.")?;
@@ -784,6 +841,9 @@ mod compiler_functions {
             parser.emit_return();
             Ok(())
         } else {
+            if parser.compiler().id == FunctionType::Initializer {
+                return parser.error("Can't return a value from an initializer.");
+            }
             expression(parser)?;
             parser.consume(TokenType::Semicolon, "Expect ';' after return value.")?;
             parser.emit_byte(OpCode::Return);
@@ -912,7 +972,7 @@ mod rule {
         define!(TokenType::Print       , None          , None        , Precedence::None      ),
         define!(TokenType::Return      , None          , None        , Precedence::None      ),
         define!(TokenType::Super       , None          , None        , Precedence::None      ),
-        define!(TokenType::This        , None          , None        , Precedence::None      ),
+        define!(TokenType::This        , Some(this)    , None        , Precedence::None      ),
         define!(TokenType::True        , Some(literal) , None        , Precedence::None      ),
         define!(TokenType::Var         , None          , None        , Precedence::None      ),
         define!(TokenType::While       , None          , None        , Precedence::None      ),
@@ -920,7 +980,8 @@ mod rule {
         define!(TokenType::EOF         , None          , None        , Precedence::None      ),
     ];
     use super::{
-        binary, call, dot, grouping, literal, number, r#and, r#or, string, unary, variable, Parser,
+        binary, call, dot, grouping, literal, number, r#and, r#or, string, this, unary, variable,
+        Parser,
     };
     use crate::scanner::TokenType;
     pub(super) type ParseFn = fn(&mut Parser, bool) -> super::Result<()>;

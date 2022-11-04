@@ -32,7 +32,7 @@ fn repl() -> io::Result<()> {
         io::stdin().read_line(&mut input)?;
         if input.is_empty() {
             print!("\n");
-            exit(0);
+            return Ok(());
         }
         if let Err(_) = vm::Vm::interpret(&input) {
             continue;

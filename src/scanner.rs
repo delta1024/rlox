@@ -257,14 +257,6 @@ impl Token {
         let str_lis = std::str::from_utf8(sli);
         str_lis.unwrap()
     }
-    pub fn null() -> Token {
-        Token {
-            id: TokenType::EOF,
-            start: std::ptr::null(),
-            length: 0,
-            line: 0,
-        }
-    }
 }
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TokenType {

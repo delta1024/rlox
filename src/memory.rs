@@ -10,8 +10,8 @@ use std::{
 };
 
 static mut RUNNING: bool = false;
-pub struct GarbageCollector;
 const GC_HEAP_GROW_FACTOR: usize = 2;
+pub struct GarbageCollector;
 
 impl GarbageCollector {
     unsafe fn collect_garbage(&self) {
@@ -93,6 +93,7 @@ impl GarbageCollector {
         }
         Self::mark_table(VM.globals.as_mut().expect("Unintialized vm."));
         mark_compiler_roots();
+        Self::mark_obj(VM.init_string as *mut dyn Obj);
     }
     unsafe fn trace_references(&self) {
         let gray_stack = VM.gray_stack.as_mut().expect("vm not initialized");
@@ -125,11 +126,19 @@ impl GarbageCollector {
             ObjType::Class => {
                 let klass = object.as_class_mut().unwrap();
                 Self::mark_obj(klass.name);
+                Self::mark_table(&mut klass.methods);
             }
             ObjType::Instance => {
                 let instance = object.as_instance_mut().unwrap();
                 Self::mark_obj(instance.klass);
                 Self::mark_table(&mut instance.fields);
+            }
+            ObjType::BoundMethod => {
+                let Some(bound) = object.as_bound_method_mut() else {
+                    panic!("uninitialized bound method")
+                };
+                Self::mark_value(&mut bound.reciever);
+                Self::mark_obj(bound.method as *mut dyn Obj);
             }
             ObjType::Native | ObjType::String => return,
         }
@@ -161,10 +170,7 @@ impl GarbageCollector {
             return;
         }
         #[cfg(feature = "log_gc")]
-        {
-            let obj_ptr = obj as *mut dyn Obj;
-            println!("{:?} mark {}", obj_ptr, obj);
-        }
+        println!("{:p} mark {}", obj, obj);
         obj.set_mark(true);
         if VM.gray_stack.is_none() {
             _ = VM.gray_stack.insert(Vec::new());
@@ -178,6 +184,7 @@ impl GarbageCollector {
 
 unsafe impl GlobalAlloc for GarbageCollector {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        VM.bytes_allocated += layout.size();
         System.alloc(layout)
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {

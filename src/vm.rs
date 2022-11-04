@@ -3,8 +3,8 @@ use crate::{
     chunk::{Ip, OpCode},
     compiler::compile,
     objects::{
-        allocate_string, NativeFn, Obj, ObjClass, ObjClosure, ObjInstance, ObjNative, ObjString,
-        ObjType, ObjUpvalue,
+        allocate_string, NativeFn, Obj, ObjBoundMethod, ObjClass, ObjClosure, ObjInstance,
+        ObjNative, ObjString, ObjType, ObjUpvalue,
     },
     value::Value,
 };
@@ -33,6 +33,7 @@ pub static mut VM: Vm = Vm {
     gray_stack: None,
     bytes_allocated: 0,
     next_gc: GC_START_THRESHOLD,
+    init_string: ptr::null_mut(),
 };
 
 fn clock_native(_: &[Value]) -> Value {
@@ -82,6 +83,7 @@ pub struct Vm {
     pub globals: Option<HashMap<*mut ObjString, Value>>,
     pub bytes_allocated: usize,
     pub next_gc: usize,
+    pub init_string: *mut ObjString,
     pub open_upvalues: *mut ObjUpvalue,
 }
 
@@ -100,6 +102,7 @@ impl Vm {
         unsafe {
             let _ = VM.strings.insert(HashMap::new());
             _ = VM.globals.insert(HashMap::new());
+            VM.init_string = allocate_string("init");
         }
         Vm::define_native("clock", clock_native);
     }
@@ -152,6 +155,24 @@ impl Vm {
                         .sub(1)
                         .write((ObjInstance::new(klass) as *mut dyn Obj).into());
                 }
+                unsafe {
+                    if let Some(initializer) = klass.methods.get(&VM.init_string) {
+                        let mut initializer = *initializer;
+                        return Vm::call(
+                            initializer
+                                .as_obj_mut()
+                                .expect("Expected object value.")
+                                .as_closure_mut()
+                                .expect("Expected closure"),
+                            arg_count,
+                        );
+                    } else if arg_count != 0 {
+                        return Vm::runtime_error(&format!(
+                            "Expect 0 arguments but got {}",
+                            arg_count
+                        ));
+                    };
+                }
                 Ok(())
             }
             Ok(obj) if obj.id() == ObjType::Closure => {
@@ -169,8 +190,62 @@ impl Vm {
                 Vm::push(result);
                 Ok(())
             }
+            Ok(obj) if obj.id() == ObjType::BoundMethod => {
+                let bound = obj.as_bound_method_mut().unwrap();
+                let method = unsafe { bound.method.as_mut().expect("uninitialized closure.") };
+                unsafe {
+                    VM.stack_top
+                        .sub(arg_count as usize)
+                        .sub(1)
+                        .write(bound.reciever);
+                }
+                Vm::call(method, arg_count)
+            }
             _ => Vm::runtime_error("Can only call functions and classes."),
         }
+    }
+    fn invoke_from_class(klass: *mut ObjClass, name: *mut ObjString, arg_count: u8) -> Result<()> {
+        let klass = unsafe { klass.as_mut().unwrap() };
+        let Some(method) = klass.methods.get(&name) else {
+            return Vm::runtime_error(&format!("Undefined property '{}'", unsafe {name.as_ref().unwrap()}));
+        };
+        let mut method = *method;
+        let method = method.as_obj_mut().unwrap().as_closure_mut().unwrap();
+        Vm::call(method, arg_count as u32)
+    }
+    fn invoke(name: *mut ObjString, arg_count: u8) -> Result<()> {
+        let mut reciever = Vm::peek(arg_count as isize);
+        let Some(instance) = reciever
+            .as_obj_mut()
+            .expect("Expected object value")
+            .as_instance_mut() else {
+          return Vm::runtime_error("Only instances have methods.");
+        };
+
+        if let Some(value) = instance.fields.get(&name) {
+            unsafe {
+                VM.stack_top.sub(arg_count as usize).sub(1).write(*value);
+                return Vm::call_value(*value, arg_count as u32);
+            }
+        }
+
+        Vm::invoke_from_class(instance.klass, name, arg_count)
+    }
+    fn bind_method(klass: *mut ObjClass, name: *mut ObjString) -> Result<()> {
+        let klass = unsafe { klass.as_mut().expect("uninitialized class") };
+        let Some(method) = klass.methods.get(&name) else {
+            return Vm::runtime_error(&format!("Undefined property {}", unsafe {name.as_ref().expect("uninitialized string.")}));
+        };
+        let mut method = *method;
+        let method = method
+            .as_obj_mut()
+            .expect("Expect object vlaue")
+            .as_closure_mut()
+            .expect("Expected closure");
+        let bound = ObjBoundMethod::new(Vm::peek(0), method);
+        Vm::pop();
+        Vm::push(bound as *mut dyn Obj);
+        Ok(())
     }
     fn capture_upvalue(local: *mut Value) -> *mut ObjUpvalue {
         let mut prev_upvale = ptr::null_mut();
@@ -215,6 +290,17 @@ impl Vm {
             }
         }
     }
+    pub fn define_method(name: *mut ObjString) {
+        let method = Vm::peek(0);
+        let mut klass = Vm::peek(1);
+        let klass = klass
+            .as_obj_mut()
+            .expect("Expected class object.")
+            .as_class_mut()
+            .expect("Expect class.");
+        klass.methods.insert(name, method);
+        Vm::pop();
+    }
     pub fn reset_stack() {
         unsafe {
             VM.open_upvalues = ptr::null_mut();
@@ -241,9 +327,7 @@ impl Vm {
             let id = m.id();
             let n: *mut dyn Obj = Pin::get_mut(m);
             #[cfg(feature = "log_gc")]
-            {
-                println!("{:?} allocate {} for {:?}", n, layout.size(), id);
-            }
+            println!("{:?} allocate {} for {:?}", n, layout.size(), id);
             n
         }
     }
@@ -386,6 +470,27 @@ impl Vm {
             }
 
             match instruction.into() {
+                OpCode::Invoke => {
+                    let method: *mut ObjString = {
+                        let mut val = Vm::read_constant(frame);
+                        val.as_obj_mut()
+                            .expect("Expected object value.")
+                            .as_string_mut()
+                            .expect("Expected string.")
+                    };
+                    let arg_count = Vm::read_byte(frame);
+                    Vm::invoke(method, arg_count)?;
+                    frame = unsafe { &mut VM.frames[VM.frame_count - 1] };
+                }
+                OpCode::Method => {
+                    let mut name = Vm::read_constant(frame);
+                    Vm::define_method(
+                        name.as_obj_mut()
+                            .expect("Expect object value.")
+                            .as_string_mut()
+                            .expect("Expected string as class name"),
+                    );
+                }
                 OpCode::GetProperty => {
                     let instance = Vm::peek(0);
                     let instance = instance.as_obj().expect("Expected Object value.");
@@ -401,8 +506,8 @@ impl Vm {
                     if let Some(value) = instance.fields.get(&(name as *mut ObjString)) {
                         Vm::pop(); // Instance.
                         Vm::push(*value);
-                    } else {
-                        Vm::runtime_error(&format!("Undefined property '{}'", name))?;
+                    } else if let Err(err) = Vm::bind_method(instance.klass, name) {
+                        return Err(err);
                     }
                 }
                 OpCode::SetProperty => {

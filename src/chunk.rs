@@ -205,7 +205,8 @@ impl Ip {
             | OpCode::SetGlobal
             | OpCode::Class
             | OpCode::GetProperty
-            | OpCode::SetProperty => {
+            | OpCode::SetProperty
+            | OpCode::Method => {
                 let n = self.peek().unwrap();
                 let m = unsafe { self.get_constant(n) };
                 (format!("{} {:<9}{} '{}'", op, " ", n, m), 1)
@@ -290,7 +291,20 @@ impl Ip {
                     2,
                 )
             }
-            // byteInstruction
+            OpCode::Invoke => {
+                let (constant, arg_count) = unsafe {
+                    (
+                        self.head.add(offset as usize + 1).read(),
+                        self.head.add(offset as usize + 2).read(),
+                    )
+                };
+                let constant = unsafe { self.get_constant(constant) };
+                (
+                    format!("{} {:<11} ({} args) {}", op, " ", arg_count, constant),
+                    offset as usize + 3,
+                )
+            }
+            // byteInstructiont
             OpCode::GetLocal
             | OpCode::SetLocal
             | OpCode::Call
@@ -367,6 +381,8 @@ mod opcode {
         Class,
         GetProperty,
         SetProperty,
+        Method,
+        Invoke,
     }
     macro_rules! from_and_into {
         ( $( $code: tt, $name: tt, $value: literal),*) => {
@@ -502,6 +518,12 @@ mod opcode {
         30,
         SetProperty,
         "SET_PROPERTY",
-        31
+        31,
+        Method,
+        "METHOD",
+        32,
+        Invoke,
+        "INVOK",
+        33
     );
 }
