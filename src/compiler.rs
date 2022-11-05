@@ -138,6 +138,7 @@ impl Compiler {
 
 struct ClassCompiler {
     enclosing: *mut ClassCompiler,
+    has_super_class: bool,
 }
 #[derive(Clone, Copy, Debug)]
 struct Local {
@@ -511,7 +512,7 @@ mod compiler_functions {
     use crate::{
         chunk::OpCode,
         objects::{allocate_string, Obj},
-        scanner::TokenType,
+        scanner::{Token, TokenType},
         vm::Vm,
     };
 
@@ -547,6 +548,38 @@ mod compiler_functions {
 
     pub(super) fn variable(parser: &mut Parser, can_assign: bool) -> Result<()> {
         parser.named_variable(parser.previous, can_assign)
+    }
+
+    fn synthetic_token(text: &str) -> Token {
+        Token {
+            id: TokenType::Identifier,
+            start: text.as_ptr(),
+            length: text.len() as isize,
+            line: 0,
+        }
+    }
+
+    pub(super) fn super_(parser: &mut Parser, _: bool) -> Result<()> {
+        if unsafe { CURRENT_CLASS.is_null() } {
+            parser.error("Can't use 'super' outside of a class.")?;
+        } else if !unsafe { CURRENT_CLASS.as_ref().unwrap().has_super_class } {
+            parser.error("Can't use 'super' in a class with no superclass.")?;
+        }
+        parser.consume(TokenType::Dot, "Expect '.' after 'super'.")?;
+        parser.consume(TokenType::Identifier, "Expect superclass method name.")?;
+        let name = parser.identifier_constant(parser.previous);
+
+        parser.named_variable(synthetic_token("this"), false)?;
+        if parser.matches(TokenType::LeftParen)? {
+            let arg_count = parser.argument_list()?;
+            parser.named_variable(synthetic_token("super"), false)?;
+            parser.emit_bytes(OpCode::SuperInvoke, name);
+            parser.emit_byte(arg_count);
+        } else {
+            parser.named_variable(synthetic_token("super"), false)?;
+            parser.emit_bytes(OpCode::GetSuper, name);
+        }
+        Ok(())
     }
 
     pub(super) fn this(parser: &mut Parser, _: bool) -> Result<()> {
@@ -725,9 +758,24 @@ mod compiler_functions {
         parser.define_variable(name_constatnt);
         let mut class_compiler = ClassCompiler {
             enclosing: unsafe { CURRENT_CLASS },
+            has_super_class: false,
         };
         unsafe {
             CURRENT_CLASS = &mut class_compiler;
+        }
+        if parser.matches(TokenType::Less)? {
+            dbg!(parser.previous.id);
+            parser.consume(TokenType::Identifier, "Expect superclass name.")?;
+            variable(parser, false)?;
+            if class_name.extract() == parser.previous.extract() {
+                parser.error("A class can't inherit from itself")?;
+            }
+            parser.begin_scope();
+            parser.compiler().add_local(synthetic_token("super"))?;
+            parser.define_variable(0);
+            parser.named_variable(class_name, false)?;
+            parser.emit_byte(OpCode::Inherit);
+            class_compiler.has_super_class = true;
         }
         parser.named_variable(class_name, false)?;
         parser.consume(TokenType::LeftBrace, "Expect '{' befor class body.")?;
@@ -736,6 +784,10 @@ mod compiler_functions {
         }
         parser.consume(TokenType::RightBrace, "Expect '}' after class body.")?;
         parser.emit_byte(OpCode::Pop);
+
+        if class_compiler.has_super_class {
+            parser.end_scope();
+        }
         unsafe {
             CURRENT_CLASS = CURRENT_CLASS.as_mut().unwrap().enclosing;
         }
@@ -971,7 +1023,7 @@ mod rule {
         define!(TokenType::Or          , None          , Some(r#or)  , Precedence::Or        ),
         define!(TokenType::Print       , None          , None        , Precedence::None      ),
         define!(TokenType::Return      , None          , None        , Precedence::None      ),
-        define!(TokenType::Super       , None          , None        , Precedence::None      ),
+        define!(TokenType::Super       , Some(super_)   , None        , Precedence::None      ),
         define!(TokenType::This        , Some(this)    , None        , Precedence::None      ),
         define!(TokenType::True        , Some(literal) , None        , Precedence::None      ),
         define!(TokenType::Var         , None          , None        , Precedence::None      ),
@@ -980,8 +1032,8 @@ mod rule {
         define!(TokenType::EOF         , None          , None        , Precedence::None      ),
     ];
     use super::{
-        binary, call, dot, grouping, literal, number, r#and, r#or, string, this, unary, variable,
-        Parser,
+        binary, call, dot, grouping, literal, number, r#and, r#or, string, super_, this, unary,
+        variable, Parser,
     };
     use crate::scanner::TokenType;
     pub(super) type ParseFn = fn(&mut Parser, bool) -> super::Result<()>;

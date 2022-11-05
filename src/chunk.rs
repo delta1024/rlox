@@ -206,7 +206,8 @@ impl Ip {
             | OpCode::Class
             | OpCode::GetProperty
             | OpCode::SetProperty
-            | OpCode::Method => {
+            | OpCode::Method
+            | OpCode::GetSuper => {
                 let n = self.peek().unwrap();
                 let m = unsafe { self.get_constant(n) };
                 (format!("{} {:<9}{} '{}'", op, " ", n, m), 1)
@@ -291,7 +292,7 @@ impl Ip {
                     2,
                 )
             }
-            OpCode::Invoke => {
+            OpCode::Invoke | OpCode::SuperInvoke => {
                 let (constant, arg_count) = unsafe {
                     (
                         self.head.add(offset as usize + 1).read(),
@@ -383,6 +384,9 @@ mod opcode {
         SetProperty,
         Method,
         Invoke,
+        Inherit,
+        GetSuper,
+        SuperInvoke,
     }
     macro_rules! from_and_into {
         ( $( $code: tt, $name: tt, $value: literal),*) => {
@@ -524,6 +528,15 @@ mod opcode {
         32,
         Invoke,
         "INVOK",
-        33
+        33,
+        Inherit,
+        "INHERIT",
+        34,
+        GetSuper,
+        "GET_SUPER",
+        35,
+        SuperInvoke,
+        "SUPER_INVOKE",
+        36
     );
 }

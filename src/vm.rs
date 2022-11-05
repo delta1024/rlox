@@ -201,7 +201,10 @@ impl Vm {
                 }
                 Vm::call(method, arg_count)
             }
-            _ => Vm::runtime_error("Can only call functions and classes."),
+            _ => {
+                println!("{}", callee.as_obj().unwrap());
+                Vm::runtime_error("Can only call functions and classes.")
+            }
         }
     }
     fn invoke_from_class(klass: *mut ObjClass, name: *mut ObjString, arg_count: u8) -> Result<()> {
@@ -470,6 +473,50 @@ impl Vm {
             }
 
             match instruction.into() {
+                OpCode::SuperInvoke => {
+                    let mut name = Vm::read_constant(frame);
+                    let name = name
+                        .as_obj_mut()
+                        .expect("Expected object")
+                        .as_string_mut()
+                        .expect("Expected string");
+                    let arg_count = Vm::read_byte(frame);
+                    let mut superclass = Vm::pop();
+                    let superclass = superclass
+                        .as_obj_mut()
+                        .expect("Expected object")
+                        .as_class_mut()
+                        .expect("Expected class");
+                    Vm::invoke_from_class(superclass, name, arg_count)?;
+                    frame = unsafe { &mut VM.frames[VM.frame_count - 1] };
+                }
+                OpCode::GetSuper => {
+                    let mut name = Vm::read_constant(frame);
+                    let name = name
+                        .as_obj_mut()
+                        .expect("Expected object")
+                        .as_string_mut()
+                        .expect("Expected string");
+                    let mut superclass = Vm::pop();
+                    let superclass = superclass
+                        .as_obj_mut()
+                        .expect("Expected object")
+                        .as_class_mut()
+                        .expect("Expected class");
+                    Vm::bind_method(superclass, name)?;
+                }
+                OpCode::Inherit => {
+                    let mut superclass = Vm::peek(1);
+                    let Some(superclass) = superclass.as_obj_mut().unwrap().as_class_mut() else {
+                        return Vm::runtime_error("Superclass must be a class.");
+                    };
+                    let mut subclass = Vm::peek(0);
+                    let subclass = subclass.as_obj_mut().unwrap().as_class_mut().unwrap();
+                    for (k, v) in &superclass.methods {
+                        subclass.methods.insert(*k, *v);
+                    }
+                    Vm::pop(); // Subclass.
+                }
                 OpCode::Invoke => {
                     let method: *mut ObjString = {
                         let mut val = Vm::read_constant(frame);
