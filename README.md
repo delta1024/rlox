@@ -60,7 +60,7 @@ n.coatColor = "black";
 ```
 #### Init function
 ```
-class Animal() {
+class Animal {
   init(species, coatColor) {
     this.species = species;
     this.coatColor = coatColor;
