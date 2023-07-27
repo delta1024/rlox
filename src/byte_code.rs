@@ -2,16 +2,24 @@ use crate::{frame::PositionCounter, value::Value};
 use std::fmt;
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum OpCode {
-    Constant(Value),
-    Print,
     Return,
+    Constant(Value),
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Print,
 }
 impl From<OpCode> for u8 {
     fn from(value: OpCode) -> Self {
         match value {
             OpCode::Return => 0,
             OpCode::Constant(_) => 1,
-            OpCode::Print => 3,
+	    OpCode::Add => 2,
+	    OpCode::Sub => 3,
+	    OpCode::Mul => 4,
+            OpCode::Div => 5,
+	    OpCode::Print => 6,
         }
     }
 }
@@ -19,7 +27,11 @@ impl From<u8> for OpCode {
     fn from(value: u8) -> Self {
         match value {
             0 => Self::Return,
-            3 => Self::Print,
+	    2 => Self::Add,
+            3 => Self::Sub,
+	    4 => Self::Mul,
+	    5 => Self::Div,
+	    6 => Self::Print,
             _ => unreachable!(),
         }
     }
