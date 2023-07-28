@@ -1,4 +1,5 @@
 mod byte_code;
+mod objects;
 mod value {
     use std::fmt::Display;
     #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
