@@ -1,4 +1,6 @@
 mod byte_code;
+mod heap_objects;
+mod heap;
 mod objects;
 mod value {
     use std::fmt::Display;
@@ -27,8 +29,12 @@ mod frame;
 mod interpret;
 mod stack;
 mod vm;
+use heap::Heap;
+use heap_objects::ObjFunction;
+use objects::ObjRef;
+
 use crate::{
-    byte_code::{Chunk, ChunkBuilder, OpCode},
+    byte_code::{ChunkBuilder, OpCode},
     frame::CallFrame,
     interpret::interpret_instruction,
     stack::CallStack,
@@ -39,9 +45,9 @@ use crate::{
 fn call_function(
     _vm: &mut Vm,
     call_stack: &mut CallStack,
-    chunk: Chunk,
+    function: ObjRef,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let frame = CallFrame::new(chunk);
+    let frame = CallFrame::new(function);
     call_stack.push(frame)?;
     Ok(())
 }
@@ -65,9 +71,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     chunk.write_byte(OpCode::Neg, 3);
     chunk.write_byte(OpCode::Print, 1);
     chunk.write_byte(OpCode::Return, 2);
-    let chunk = Chunk::from(chunk);
-    let mut vm = Vm::new();
+    let mut heap = Heap::new();
+    let main_str  = heap.allocate_string("_main");
+    let main_fn = heap.allocate_object::<ObjFunction>(ObjFunction::new(main_str, chunk));
+	let mut vm = Vm::new();
     let mut call_stack = CallStack::new();
-    call_function(&mut vm, &mut call_stack, chunk)?;
+    call_function(&mut vm, &mut call_stack, main_fn)?;
     main_loop(&mut vm, &mut call_stack)
 }

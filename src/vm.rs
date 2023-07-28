@@ -66,7 +66,7 @@ impl Vm {
     }
     pub(crate) fn unary_operation(&mut self, op: UnaryOperation) -> VmResult<Value> {
         use UnaryOperation as Uo;
-        let val = self.pop().ok_or(VmError::WrongType)?;
+        let val = self.pop().ok_or(VmError::StackEmptyOnPopOperation)?;
         let Value::Int(val) = val else {
 	    return Err(VmError::WrongType);
 	};
