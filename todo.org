@@ -1,3 +1,4 @@
 #+TITLE: Todos
-* TODO impl ~StackTrace~ for ~ValueStack~ and ~CallStack~
-* TODO impl ~Display~ for ~Value~ 
+* DONE impl ~StackTrace~ for ~ValueStack~ and ~CallStack~
+* TODO implement functions
+* DONE impl ~Display~ for ~Value~ 

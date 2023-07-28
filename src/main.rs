@@ -61,6 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     chunk.write_byte(OpCode::Constant(Value::Int(32)), 1);
     chunk.write_byte(OpCode::Constant(Value::Int(32)), 1);
     chunk.write_byte(OpCode::Add, 2);
+    chunk.write_byte(OpCode::Neg, 3);
     chunk.write_byte(OpCode::Print, 1);
     chunk.write_byte(OpCode::Return, 2);
     let chunk = Chunk::from(chunk);

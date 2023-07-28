@@ -1,6 +1,7 @@
 use crate::{frame::PositionCounter, value::Value};
 use std::fmt;
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+/// Internal Operation Code to be exacuted.
 pub(crate) enum OpCode {
     Return,
     Constant(Value),
@@ -8,6 +9,7 @@ pub(crate) enum OpCode {
     Sub,
     Mul,
     Div,
+    Neg,
     Print,
 }
 impl From<OpCode> for u8 {
@@ -19,7 +21,8 @@ impl From<OpCode> for u8 {
             OpCode::Sub => 3,
             OpCode::Mul => 4,
             OpCode::Div => 5,
-            OpCode::Print => 6,
+            OpCode::Neg => 6,
+            OpCode::Print => 7,
         }
     }
 }
@@ -31,7 +34,8 @@ impl From<u8> for OpCode {
             3 => Self::Sub,
             4 => Self::Mul,
             5 => Self::Div,
-            6 => Self::Print,
+            6 => Self::Neg,
+            7 => Self::Print,
             _ => unreachable!(),
         }
     }
@@ -59,7 +63,7 @@ impl Chunk {
         use OpCode::*;
         let position = position.0 as usize;
         match self.code[position] {
-            0 | 2..=6 => Ok((self.code[position].into(), position + 1)),
+            0 | 2..=7 => Ok((self.code[position].into(), position + 1)),
             1 => Ok((
                 Constant(self.values[self.code[position + 1] as usize]),
                 position + 2,
@@ -85,6 +89,7 @@ impl ChunkBuilder {
             | OpCode::Sub
             | OpCode::Mul
             | OpCode::Div
+            | OpCode::Neg
             | OpCode::Print => self.code.push(op_code.into()),
             OpCode::Constant(v) => {
                 self.values.push(v);

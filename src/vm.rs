@@ -25,7 +25,14 @@ impl From<OpCode> for BinaryOperation {
 pub(crate) enum UnaryOperation {
     Neg,
 }
-
+impl From<OpCode> for UnaryOperation {
+    fn from(value: OpCode) -> Self {
+	match value {
+	    OpCode::Neg => Self::Neg,
+	    _ => unreachable!(),
+	}
+    }
+}
 pub(crate) struct Vm {
     stack: ValueStack,
 }
