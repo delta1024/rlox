@@ -11,43 +11,30 @@ mod value {
     }
 
     impl Display for Value {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-	    use Value::*;
-	    match self {
-		Nil => write!(f, "nil"),
-		Int(v) => write!(f, "{v}"),
-		Bool(v) => write!(f, "{v}"),
-	    }
-	}
-    }	
-    
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            use Value::*;
+            match self {
+                Nil => write!(f, "nil"),
+                Int(v) => write!(f, "{v}"),
+                Bool(v) => write!(f, "{v}"),
+            }
+        }
+    }
 }
 
 mod frame;
+mod interpret;
 mod stack;
 mod vm;
 use crate::{
     byte_code::{Chunk, ChunkBuilder, OpCode},
     frame::CallFrame,
+    interpret::interpret_instruction,
     stack::CallStack,
     value::Value,
     vm::Vm,
 };
-fn interpret_instruction(
-    vm: &mut Vm,
-    call_stack: &mut CallStack,
-    instruction: OpCode,
-) -> Result<(), Box<dyn std::error::Error>> {
-    match instruction {
-        OpCode::Constant(c) => vm.push(c)?,
-        OpCode::Print => {
-            let v = vm.pop();
-            println!("{v:?}");
-        }
-        OpCode::Return => _ = call_stack.pop(),
-    }
-    Ok(())
-}
+
 fn call_function(
     _vm: &mut Vm,
     call_stack: &mut CallStack,
@@ -72,6 +59,8 @@ fn main_loop(vm: &mut Vm, call_stack: &mut CallStack) -> Result<(), Box<dyn std:
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut chunk = ChunkBuilder::new();
     chunk.write_byte(OpCode::Constant(Value::Int(32)), 1);
+    chunk.write_byte(OpCode::Constant(Value::Int(32)), 1);
+    chunk.write_byte(OpCode::Add, 2);
     chunk.write_byte(OpCode::Print, 1);
     chunk.write_byte(OpCode::Return, 2);
     let chunk = Chunk::from(chunk);

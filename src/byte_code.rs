@@ -15,11 +15,11 @@ impl From<OpCode> for u8 {
         match value {
             OpCode::Return => 0,
             OpCode::Constant(_) => 1,
-	    OpCode::Add => 2,
-	    OpCode::Sub => 3,
-	    OpCode::Mul => 4,
+            OpCode::Add => 2,
+            OpCode::Sub => 3,
+            OpCode::Mul => 4,
             OpCode::Div => 5,
-	    OpCode::Print => 6,
+            OpCode::Print => 6,
         }
     }
 }
@@ -27,11 +27,11 @@ impl From<u8> for OpCode {
     fn from(value: u8) -> Self {
         match value {
             0 => Self::Return,
-	    2 => Self::Add,
+            2 => Self::Add,
             3 => Self::Sub,
-	    4 => Self::Mul,
-	    5 => Self::Div,
-	    6 => Self::Print,
+            4 => Self::Mul,
+            5 => Self::Div,
+            6 => Self::Print,
             _ => unreachable!(),
         }
     }
@@ -59,7 +59,7 @@ impl Chunk {
         use OpCode::*;
         let position = position.0 as usize;
         match self.code[position] {
-            0 | 3 => Ok((self.code[position].into(), position + 1)),
+            0 | 2..=6 => Ok((self.code[position].into(), position + 1)),
             1 => Ok((
                 Constant(self.values[self.code[position + 1] as usize]),
                 position + 2,
@@ -80,7 +80,12 @@ impl ChunkBuilder {
     }
     pub(crate) fn write_byte(&mut self, op_code: OpCode, line: u8) {
         match op_code {
-            OpCode::Return | OpCode::Print => self.code.push(op_code.into()),
+            OpCode::Return
+            | OpCode::Add
+            | OpCode::Sub
+            | OpCode::Mul
+            | OpCode::Div
+            | OpCode::Print => self.code.push(op_code.into()),
             OpCode::Constant(v) => {
                 self.values.push(v);
                 self.code.push(op_code.into());

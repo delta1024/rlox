@@ -1,4 +1,5 @@
 use crate::{
+    byte_code::OpCode,
     stack::{StackResult, ValueStack},
     value::Value,
 };
@@ -9,10 +10,22 @@ pub(crate) enum BinaryOperation {
     Div,
     Mul,
 }
-
+impl From<OpCode> for BinaryOperation {
+    fn from(value: OpCode) -> Self {
+        use OpCode as Op;
+        match value {
+            Op::Add => Self::Add,
+            Op::Sub => Self::Sub,
+            Op::Mul => Self::Mul,
+            Op::Div => Self::Div,
+            _ => unreachable!(),
+        }
+    }
+}
 pub(crate) enum UnaryOperation {
     Neg,
 }
+
 pub(crate) struct Vm {
     stack: ValueStack,
 }
