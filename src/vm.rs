@@ -9,6 +9,7 @@ pub(crate) enum BinaryOperation {
     Div,
     Mul,
 }
+
 pub(crate) enum UnaryOperation {
     Neg,
 }
@@ -29,24 +30,35 @@ impl Vm {
         self.stack.pop()
     }
     pub(crate) fn binary_operation(&mut self, op: BinaryOperation) -> VmResult<Value> {
-        use BinaryOperation as BO;
-        match op {
-            BO::Add => todo!(),
-            BO::Sub => todo!(),
-            BO::Div => todo!(),
-            BO::Mul => todo!(),
-        }
+        use BinaryOperation as Bo;
+        let (Some(b), Some(a)) = (self.pop(), self.pop()) else {
+	  return Err(VmError::StackEmptyOnPopOperation);
+	};
+        let (Value::Int(b), Value::Int(a)) = (b, a) else {
+	    return Err(VmError::WrongType);
+	};
+        Ok(match op {
+            Bo::Add => Value::Int(a + b),
+            Bo::Sub => Value::Int(a - b),
+            Bo::Div => Value::Int(a / b),
+            Bo::Mul => Value::Int(a * b),
+        })
     }
     pub(crate) fn unary_operation(&mut self, op: UnaryOperation) -> VmResult<Value> {
-        use UnaryOperation as UO;
-        match op {
-            UO::Neg => todo!(),
-        }
+        use UnaryOperation as Uo;
+        let val = self.pop().ok_or(VmError::WrongType)?;
+        let Value::Int(val) = val else {
+	    return Err(VmError::WrongType);
+	};
+        Ok(match op {
+            Uo::Neg => Value::Int(-val),
+        })
     }
 }
 pub type VmResult<T> = std::result::Result<T, VmError>;
 #[derive(Debug, Clone, Copy)]
 pub enum VmError {
+    WrongType,
     StackEmptyOnPopOperation,
 }
 impl fmt::Display for VmError {
