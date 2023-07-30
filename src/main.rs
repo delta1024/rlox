@@ -1,7 +1,11 @@
 mod byte_code;
-mod heap_objects;
+mod frame;
 mod heap;
+mod heap_objects;
+mod interpret;
+mod lexer;
 mod objects;
+mod stack;
 mod value {
     use std::fmt::Display;
     #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -24,19 +28,17 @@ mod value {
         }
     }
 }
-
-mod frame;
-mod interpret;
-mod stack;
 mod vm;
-use heap::Heap;
-use heap_objects::ObjFunction;
-use objects::ObjRef;
+
+use lexer::Lexer;
 
 use crate::{
     byte_code::{ChunkBuilder, OpCode},
     frame::CallFrame,
+    heap::Heap,
+    heap_objects::ObjFunction,
     interpret::interpret_instruction,
+    objects::ObjRef,
     stack::CallStack,
     value::Value,
     vm::Vm,
@@ -64,18 +66,24 @@ fn main_loop(vm: &mut Vm, call_stack: &mut CallStack) -> Result<(), Box<dyn std:
     Ok(())
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut chunk = ChunkBuilder::new();
-    chunk.write_byte(OpCode::Constant(Value::Int(32)), 1);
-    chunk.write_byte(OpCode::Constant(Value::Int(32)), 1);
-    chunk.write_byte(OpCode::Add, 2);
-    chunk.write_byte(OpCode::Neg, 3);
-    chunk.write_byte(OpCode::Print, 1);
-    chunk.write_byte(OpCode::Return, 2);
-    let mut heap = Heap::new();
-    let main_str  = heap.allocate_string("_main");
-    let main_fn = heap.allocate_object::<ObjFunction>(ObjFunction::new(main_str, chunk));
-	let mut vm = Vm::new();
-    let mut call_stack = CallStack::new();
-    call_function(&mut vm, &mut call_stack, main_fn)?;
-    main_loop(&mut vm, &mut call_stack)
+    // let mut chunk = ChunkBuilder::new();
+    // chunk.write_byte(OpCode::Constant(Value::Int(32)), 1);
+    // chunk.write_byte(OpCode::Constant(Value::Int(32)), 1);
+    // chunk.write_byte(OpCode::Add, 2);
+    // chunk.write_byte(OpCode::Neg, 3);
+    // chunk.write_byte(OpCode::Print, 1);
+    // chunk.write_byte(OpCode::Return, 2);
+
+    // let mut heap = Heap::new();
+    // let main_str = heap.allocate_string("_main");
+    // let main_fn = heap.allocate_object::<ObjFunction>(ObjFunction::new(main_str, chunk));
+    // let mut vm = Vm::new();
+    // let mut call_stack = CallStack::new();
+    // call_function(&mut vm, &mut call_stack, main_fn)?;
+    // main_loop(&mut vm, &mut call_stack)
+    let lexer = Lexer::new("(){},.-+;/*");
+    for token in lexer {
+	dbg!(token);
+    }
+Ok(())
 }

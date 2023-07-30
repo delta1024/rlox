@@ -14,11 +14,11 @@ pub(crate) fn interpret_instruction(
         OpCode::Add | OpCode::Sub | OpCode::Mul | OpCode::Div => {
             let val = vm.binary_operation(instruction.into())?;
             vm.push(val)?;
-        },
-	OpCode::Neg => {
-	    let val = vm.unary_operation(instruction.into())?;
-	    vm.push(val)?;
-	}
+        }
+        OpCode::Neg => {
+            let val = vm.unary_operation(instruction.into())?;
+            vm.push(val)?;
+        }
 
         OpCode::Return => _ = call_stack.pop(),
     }

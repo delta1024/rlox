@@ -27,10 +27,10 @@ pub(crate) enum UnaryOperation {
 }
 impl From<OpCode> for UnaryOperation {
     fn from(value: OpCode) -> Self {
-	match value {
-	    OpCode::Neg => Self::Neg,
-	    _ => unreachable!(),
-	}
+        match value {
+            OpCode::Neg => Self::Neg,
+            _ => unreachable!(),
+        }
     }
 }
 pub(crate) struct Vm {

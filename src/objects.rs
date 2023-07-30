@@ -30,7 +30,7 @@ impl Drop for OwnedObject {
 }
 
 impl OwnedObject {
-pub(crate)    fn new<T: IsObj>(obj: T) -> OwnedObject {
+    pub(crate) fn new<T: IsObj>(obj: T) -> OwnedObject {
         let id = T::get_obj_id();
         let b = Box::new(obj);
         let ptr = Box::into_raw(b).cast();
@@ -61,19 +61,17 @@ pub(crate) struct ObjRef {
 
 impl fmt::Display for ObjRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-	match self.id {
-	    ObjId::Function => {
-		let func = self.get_ref::<ObjFunction>().unwrap();
-		write!(f, "{}", *func)
-	    }
-	    ObjId::String =>  {
-		let s  =	self.get_ref::<ObjString>().unwrap();
-		write!(f, "{}", *s)
-	    }
-	}
+        match self.id {
+            ObjId::Function => {
+                let func = self.get_ref::<ObjFunction>().unwrap();
+                write!(f, "{}", *func)
+            }
+            ObjId::String => {
+                let s = self.get_ref::<ObjString>().unwrap();
+                write!(f, "{}", *s)
+            }
+        }
     }
-
-    
 }
 impl ObjRef {
     pub(crate) fn get_ref<T: IsObj>(&self) -> Result<ManuallyDrop<&T>, ObjCastErr> {
