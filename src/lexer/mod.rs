@@ -1,5 +1,5 @@
 use std::str::{CharIndices, FromStr};
-
+mod peek_next;
 #[rustfmt::skip]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum TokenType {
@@ -98,27 +98,7 @@ where
 	    return Some(Token::new("", TokenType::Eof, self.line));
 	};
 
-        // if ch.is_ascii_digit() {
-        //     let mut pos = 0;
-        //     self.chars.skip_while(|c| {
-        //         pos = c.0;
-        //         c.1.is_ascii_digit()
-        //     });
-        //     if Some((_, '.')) == self.chars.peekable().peek() {
-        //         self.chars.next(); // eat the dot
-        //         self.chars.skip_while(|c| {
-        //             pos = c.0;
-        //             c.1.is_ascii_digit()
-        //         });
-        //     }
-        //     let token = Token::new(
-        //         &self.source[self.start_pos..=pos],
-        //         TokenType::Number,
-        //         self.line,
-        //     );
-        //     self.start_pos = pos;
-        //     return Some(token);
-        // }
+
         let token = match ch {
             '(' => Some(Token::new(
                 &self.source[self.start_pos..=i],
