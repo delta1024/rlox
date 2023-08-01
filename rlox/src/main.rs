@@ -83,7 +83,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // main_loop(&mut vm, &mut call_stack)
     let lexer = Lexer::new("(){},.-+;/*");
     for token in lexer {
-	dbg!(token);
+        dbg!(token);
     }
-Ok(())
+    Ok(())
 }

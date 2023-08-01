@@ -1,5 +1,4 @@
 use std::str::{CharIndices, FromStr};
-mod peek_next;
 #[rustfmt::skip]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum TokenType {
@@ -97,7 +96,6 @@ where
 	    self.at_end = true;
 	    return Some(Token::new("", TokenType::Eof, self.line));
 	};
-
 
         let token = match ch {
             '(' => Some(Token::new(
