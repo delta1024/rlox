@@ -82,7 +82,38 @@ where
         }
     }
 }
-
+impl<'a> Lexer<'a>
+where
+    Self: 'a,
+{
+    fn check_token(
+        &mut self,
+        ch: char,
+        pos: usize,
+        if_true: TokenType,
+        if_not: TokenType,
+    ) -> (Option<Token<'a>>, usize) {
+        if let Some(a) = self.chars.next_if(|c| c.1 == ch) {
+            (
+                Some(Token::new(
+                    &self.source[self.start_pos..=a.0],
+                    if_true,
+                    self.line,
+                )),
+                a.0 + 1,
+            )
+        } else {
+            (
+                Some(Token::new(
+                    &self.source[self.start_pos..=pos],
+                    if_not,
+                    self.line,
+                )),
+                pos + 1,
+            )
+        }
+    }
+}
 impl<'a> Iterator for Lexer<'a>
 where
     Self: 'a,
@@ -99,65 +130,117 @@ where
 	};
 
         let token = match ch {
-            '(' => Some(Token::new(
-                &self.source[self.start_pos..=i],
-                TokenType::LeftParen,
-                self.line,
-            )),
-            ')' => Some(Token::new(
-                &self.source[self.start_pos..=i],
-                TokenType::RightParen,
-                self.line,
-            )),
-            '{' => Some(Token::new(
-                &self.source[self.start_pos..=i],
-                TokenType::LeftBrace,
-                self.line,
-            )),
-            '}' => Some(Token::new(
-                &self.source[self.start_pos..=i],
-                TokenType::RightBrace,
-                self.line,
-            )),
-            ',' => Some(Token::new(
-                &self.source[self.start_pos..=i],
-                TokenType::Comma,
-                self.line,
-            )),
-            '.' => Some(Token::new(
-                &self.source[self.start_pos..=i],
-                TokenType::Dot,
-                self.line,
-            )),
-            '-' => Some(Token::new(
-                &self.source[self.start_pos..=i],
-                TokenType::Minus,
-                self.line,
-            )),
-            '+' => Some(Token::new(
-                &self.source[self.start_pos..=i],
-                TokenType::Plus,
-                self.line,
-            )),
-            ';' => Some(Token::new(
-                &self.source[self.start_pos..=i],
-                TokenType::Semicolon,
-                self.line,
-            )),
-            '/' => Some(Token::new(
-                &self.source[self.start_pos..=i],
-                TokenType::Slash,
-                self.line,
-            )),
-            '*' => Some(Token::new(
-                &self.source[self.start_pos..=i],
-                TokenType::Star,
-                self.line,
-            )),
+            '(' => (
+                Some(Token::new(
+                    &self.source[self.start_pos..=i],
+                    TokenType::LeftParen,
+                    self.line,
+                )),
+                i + 1,
+            ),
+            ')' => (
+                Some(Token::new(
+                    &self.source[self.start_pos..=i],
+                    TokenType::RightParen,
+                    self.line,
+                )),
+                i + 1,
+            ),
+            '{' => (
+                Some(Token::new(
+                    &self.source[self.start_pos..=i],
+                    TokenType::LeftBrace,
+                    self.line,
+                )),
+                i + 1,
+            ),
+            '}' => (
+                Some(Token::new(
+                    &self.source[self.start_pos..=i],
+                    TokenType::RightBrace,
+                    self.line,
+                )),
+                i + 1,
+            ),
+            ',' => (
+                Some(Token::new(
+                    &self.source[self.start_pos..=i],
+                    TokenType::Comma,
+                    self.line,
+                )),
+                i + 1,
+            ),
+            '.' => (
+                Some(Token::new(
+                    &self.source[self.start_pos..=i],
+                    TokenType::Dot,
+                    self.line,
+                )),
+                i + 1,
+            ),
+            '-' => (
+                Some(Token::new(
+                    &self.source[self.start_pos..=i],
+                    TokenType::Minus,
+                    self.line,
+                )),
+                i + 1,
+            ),
+            '+' => (
+                Some(Token::new(
+                    &self.source[self.start_pos..=i],
+                    TokenType::Plus,
+                    self.line,
+                )),
+                i + 1,
+            ),
+            ';' => (
+                Some(Token::new(
+                    &self.source[self.start_pos..=i],
+                    TokenType::Semicolon,
+                    self.line,
+                )),
+                i + 1,
+            ),
+            '/' => (
+                Some(Token::new(
+                    &self.source[self.start_pos..=i],
+                    TokenType::Slash,
+                    self.line,
+                )),
+                i + 1,
+            ),
+            '*' => (
+                Some(Token::new(
+                    &self.source[self.start_pos..=i],
+                    TokenType::Star,
+                    self.line,
+                )),
+                i + 1,
+            ),
+            '!' => self.check_token('=', i, TokenType::BangEqual, TokenType::Bang),
+            '>' => self.check_token('=', i, TokenType::GreaterEqual, TokenType::Greater),
+            '<' => self.check_token('=', i, TokenType::LessEqual, TokenType::Less),
+            '=' => self.check_token('=', i, TokenType::EqualEqual, TokenType::Equal),
+            '"' => {
+                while let Some(_) = self.chars.next_if(|c| c.1 != '"') {}
+                if let Some((i, '"')) = self.chars.next() {
+                    (
+                        Some(Token::new(
+                            &self.source[self.start_pos..=i],
+                            TokenType::String,
+                            self.line,
+                        )),
+                        i + 1,
+                    )
+                } else {
+		    todo!("handle unterminated strings")
+                }
+            }
             _ => todo!(),
         };
-        self.start_pos = i + 1;
-        token
+        self.start_pos = token.1;
+        token.0
     }
 }
 #[cfg(test)]
@@ -192,5 +275,29 @@ mod test {
         ];
         let result = Lexer::new(test_str).collect::<Vec<_>>();
         assert_eq!(token_array, result)
+    }
+    #[test]
+    fn two_character_tokens() {
+        let test_str = "!!=>>=<<====";
+        let token_array = vec![
+            make_token!("!", Bang, 1),
+            make_token!("!=", BangEqual, 1),
+            make_token!(">", Greater, 1),
+            make_token!(">=", GreaterEqual, 1),
+            make_token!("<", Less, 1),
+            make_token!("<=", LessEqual, 1),
+            make_token!("==", EqualEqual, 1),
+            make_token!("=", Equal, 1),
+            make_token!("", Eof, 1),
+        ];
+        let result = Lexer::new(test_str).collect::<Vec<_>>();
+        assert_eq!(token_array, result)
+    }
+    #[test]
+    fn strings() {
+	let test_str = "\"hello\"";
+	let token = make_token!("\"hello\"", String, 1);
+	let mut lexer = Lexer::new(test_str);
+	assert_eq!(Some(token), lexer.next());
     }
 }
