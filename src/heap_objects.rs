@@ -39,10 +39,10 @@ pub(crate) struct ObjFunction {
 }
 
 impl ObjFunction {
-    pub(crate) fn new(name: ObjRef, builder: ChunkBuilder) -> Self {
+    pub(crate) fn new(name: ObjRef, chunk: Chunk) -> Self {
         Self {
             name,
-            chunk: builder.into(),
+            chunk
         }
     }
 }

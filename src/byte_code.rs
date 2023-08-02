@@ -50,6 +50,7 @@ impl fmt::Display for ReadInstructionError {
         write!(f, "Invalid opcode")
     }
 }
+#[derive(Debug)]
 pub(crate) struct Chunk {
     code: Box<[u8]>,
     values: Box<[Value]>,

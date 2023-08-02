@@ -20,7 +20,10 @@ pub(crate) fn interpret_instruction(
             vm.push(val)?;
         }
 
-        OpCode::Return => _ = call_stack.pop(),
+        OpCode::Return => _ = {
+	    interpret_instruction(vm, call_stack, OpCode::Print)?;
+	    call_stack.pop()
+	},
     }
     Ok(())
 }

@@ -48,11 +48,11 @@ impl FromStr for TokenType {
         }
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct Token<'a> {
-    lexum: &'a str,
-    id: TokenType,
-    line: usize,
+    pub(crate) lexum: &'a str,
+    pub(crate) id: TokenType,
+    pub(crate) line: usize,
 }
 
 impl<'a> Token<'a> {
@@ -60,6 +60,7 @@ impl<'a> Token<'a> {
         Self { lexum, id, line }
     }
 }
+#[derive(Debug)]
 pub(crate) struct Lexer<'a> {
     source: &'a str,
     start_pos: usize,
@@ -261,13 +262,15 @@ where
                 }
             }
             c if c.is_ascii_digit() => {
-                let mut i: usize = 0;
+let mut i = self.start_pos;
                 while let Some((s, _)) = self.chars.next_if(|c| c.1.is_ascii_digit()) {
-                    i = s;
+                    i +=1;
                 }
                 if let Some((_, '.')) = self.chars.next_if(|c| c.1 == '.') {
+		    i += 1;
                     while let Some((s, _)) = self.chars.next_if(|c| c.1.is_ascii_digit()) {
-                        i = s;
+
+			i += 1;
                     }
                 }
                 (
