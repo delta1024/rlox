@@ -1,3 +1,4 @@
+use peekable_next::{PeekNext, PeekableNext};
 use std::str::{CharIndices, FromStr};
 #[rustfmt::skip]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -47,7 +48,7 @@ impl FromStr for TokenType {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct Token<'a> {
     lexum: &'a str,
     id: TokenType,
@@ -64,7 +65,7 @@ pub(crate) struct Lexer<'a> {
     start_pos: usize,
     line: usize,
     at_end: bool,
-    chars: CharIndices<'a>,
+    chars: PeekableNext<CharIndices<'a>>,
 }
 
 impl<'a> Lexer<'a>
@@ -77,7 +78,7 @@ where
             start_pos: 0,
             at_end: false,
             line: 1,
-            chars: source.char_indices(),
+            chars: source.char_indices().peekable_next(),
         }
     }
 }
@@ -157,5 +158,39 @@ where
         };
         self.start_pos = i + 1;
         token
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    macro_rules! make_token {
+        ($string:literal, $token:tt, $line:literal) => {
+            Token {
+                lexum: $string,
+                id: TokenType::$token,
+                line: $line,
+            }
+        };
+    }
+
+    #[test]
+    fn single_character_tokens() {
+        let test_str = "(){},.-+/*";
+        let token_array = vec![
+            make_token!("(", LeftParen, 1),
+            make_token!(")", RightParen, 1),
+            make_token!("{", LeftBrace, 1),
+            make_token!("}", RightBrace, 1),
+            make_token!(",", Comma, 1),
+            make_token!(".", Dot, 1),
+            make_token!("-", Minus, 1),
+            make_token!("+", Plus, 1),
+            make_token!("/", Slash, 1),
+            make_token!("*", Star, 1),
+            make_token!("", Eof, 1),
+        ];
+        let result = Lexer::new(test_str).collect::<Vec<_>>();
+        assert_eq!(token_array, result)
     }
 }

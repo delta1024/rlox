@@ -1,2 +1,10 @@
-[workspace]
-members = ["rlox", "peekable_next"]
+[package]
+name = "rlox"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+peekable_next = "0.2.0"
+
