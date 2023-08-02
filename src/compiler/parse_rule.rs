@@ -1,6 +1,6 @@
 use crate::lexer::TokenType;
 
-use super::{grouping, CompilerError, Parser, Precedence, binary, unary, number};
+use super::{binary, grouping, number, unary, CompilerError, Parser, Precedence};
 
 pub(super) type ParseFn = fn(&mut Parser) -> Result<(), CompilerError>;
 #[derive(Default)]
@@ -23,25 +23,25 @@ impl GetRule for TokenType {
                 prefix: Some(grouping),
                 ..Default::default()
             }),
-	    Self::Minus => Some(ParseRule{
-		prefix: Some(unary),
-		infix: Some(binary),
-		precedence: Precedence::Term,
-	    }),
-	    Self::Plus => Some(ParseRule{
-		infix: Some(binary),
-		precedence: Precedence::Term,
-		..Default::default()
-	    }),
-	    Self::Slash | Self::Star => Some(ParseRule {
-		infix: Some(binary),
-		precedence: Precedence::Factor,
-		..Default::default()
-	    }),
-	    Self::Number => Some(ParseRule {
-		prefix: Some(number),
-		..Default::default()
-	    }),
+            Self::Minus => Some(ParseRule {
+                prefix: Some(unary),
+                infix: Some(binary),
+                precedence: Precedence::Term,
+            }),
+            Self::Plus => Some(ParseRule {
+                infix: Some(binary),
+                precedence: Precedence::Term,
+                ..Default::default()
+            }),
+            Self::Slash | Self::Star => Some(ParseRule {
+                infix: Some(binary),
+                precedence: Precedence::Factor,
+                ..Default::default()
+            }),
+            Self::Number => Some(ParseRule {
+                prefix: Some(number),
+                ..Default::default()
+            }),
             _ => None,
         }
     }

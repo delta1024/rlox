@@ -1,5 +1,7 @@
-
-use std::{iter::Peekable, str::{CharIndices, FromStr}};
+use std::{
+    iter::Peekable,
+    str::{CharIndices, FromStr},
+};
 #[rustfmt::skip]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum TokenType {
@@ -216,13 +218,13 @@ where
             ),
             '/' => {
                 if self.chars.peek().map(|c| c.1) == Some('/') {
-                    while self.chars.next_if(|c| c.1 != '\n' ).is_some() {}
+                    while self.chars.next_if(|c| c.1 != '\n').is_some() {}
                     // consume the '\n'
                     if let Some((pos, _)) = self.chars.next() {
-			self.line += 1;
+                        self.line += 1;
                         self.start_pos = pos + 1;
                     }
-		    return self.next();
+                    return self.next();
                 }
 
                 (
@@ -262,15 +264,14 @@ where
                 }
             }
             c if c.is_ascii_digit() => {
-let mut i = self.start_pos;
+                let mut i = self.start_pos;
                 while let Some((s, _)) = self.chars.next_if(|c| c.1.is_ascii_digit()) {
-                    i +=1;
+                    i += 1;
                 }
                 if let Some((_, '.')) = self.chars.next_if(|c| c.1 == '.') {
-		    i += 1;
+                    i += 1;
                     while let Some((s, _)) = self.chars.next_if(|c| c.1.is_ascii_digit()) {
-
-			i += 1;
+                        i += 1;
                     }
                 }
                 (
@@ -400,12 +401,11 @@ mod test {
     }
     #[test]
     fn comments() {
-	let test_str = "// hello mom \nfun class me";
+        let test_str = "// hello mom \nfun class me";
         let expected = make_token!("fun", Fun, 2);
         let mut lexer = Lexer::new(test_str);
         assert_eq!(Some(expected), lexer.next());
         assert_eq!(Some(make_token!("class", Class, 2)), lexer.next());
         assert_eq!(Some(make_token!("me", Identifier, 2)), lexer.next());
     }
-    
 }

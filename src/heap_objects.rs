@@ -40,10 +40,7 @@ pub(crate) struct ObjFunction {
 
 impl ObjFunction {
     pub(crate) fn new(name: ObjRef, chunk: Chunk) -> Self {
-        Self {
-            name,
-            chunk
-        }
+        Self { name, chunk }
     }
 }
 impl Display for ObjFunction {

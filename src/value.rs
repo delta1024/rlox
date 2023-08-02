@@ -10,13 +10,13 @@ pub(crate) enum Value {
 
 impl From<i64> for Value {
     fn from(value: i64) -> Self {
-	Self::Int(value)
+        Self::Int(value)
     }
 }
 
 impl From<bool> for Value {
     fn from(value: bool) -> Self {
-	Self::Bool(value)
+        Self::Bool(value)
     }
 }
 
