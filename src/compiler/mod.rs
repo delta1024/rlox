@@ -9,7 +9,7 @@ pub use parser::*;
 pub use precedence::*;
 
 use crate::{
-    byte_code::{Chunk, OpCode, CompilationResult},
+    byte_code::{Chunk, CompilationResult, OpCode},
     lexer::{Lexer, TokenType},
 };
 #[derive(Debug, Clone)]

@@ -48,8 +48,8 @@ fn main_loop(vm: &mut Vm, call_stack: &mut CallStack) -> Result<(), Box<dyn std:
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let chunk = match compile("-(1 - 2 + 3)").0 {
-	Ok(c) => c,
-	Err(err) => panic!("{err}"),
+        Ok(c) => c,
+        Err(err) => panic!("{err}"),
     };
     let mut heap = Heap::new();
     let main_str = heap.allocate_string("_main");

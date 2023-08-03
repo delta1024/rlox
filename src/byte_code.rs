@@ -118,14 +118,15 @@ impl FromIterator<Result<(OpCode, usize), CompilerError>> for CompilationResult 
         iter: I,
     ) -> CompilationResult {
         let b = iter.into_iter().collect::<Vec<_>>();
-	let mut builder = ChunkBuilder::new();
-	for i in b {
-	    match i {
-		Ok((b, l)) => {builder = builder.write_byte(b, l as u8);},
-		Err(err) => return CompilationResult(Err(err)),
-	    }
-	}
-	CompilationResult(Ok(builder.into()))
-
+        let mut builder = ChunkBuilder::new();
+        for i in b {
+            match i {
+                Ok((b, l)) => {
+                    builder = builder.write_byte(b, l as u8);
+                }
+                Err(err) => return CompilationResult(Err(err)),
+            }
+        }
+        CompilationResult(Ok(builder.into()))
     }
 }

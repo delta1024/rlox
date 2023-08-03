@@ -67,7 +67,7 @@ pub(crate) struct Lexer<'a> {
     source: &'a str,
     start_pos: usize,
     line: usize,
-    pub(crate)at_end: bool,
+    pub(crate) at_end: bool,
     chars: Peekable<CharIndices<'a>>,
 }
 

@@ -1,4 +1,4 @@
-use std::{iter::Peekable, collections::VecDeque};
+use std::{collections::VecDeque, iter::Peekable};
 
 use crate::{
     byte_code::OpCode,
@@ -83,7 +83,6 @@ impl<'a> Iterator for Parser<'a> {
                 self.que.push_back(Err(err));
             } // Chech for Eof
             self.end_compiler();
-            
         }
         self.que.pop_front()
     }
