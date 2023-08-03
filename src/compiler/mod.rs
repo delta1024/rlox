@@ -28,7 +28,7 @@ impl Display for CompilerError {
     }
 }
 
-pub(crate) fn compile(source: &str) -> CompilationResult {
+pub(crate) fn compile(source: &str) -> Result<Chunk, CompilerError> {
     let lexer = Lexer::new(source).peekable();
     let parser = Parser::new(lexer);
     //    parser.advance();

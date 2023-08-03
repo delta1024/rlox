@@ -47,7 +47,7 @@ fn main_loop(vm: &mut Vm, call_stack: &mut CallStack) -> Result<(), Box<dyn std:
     Ok(())
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let chunk = match compile("-(1 - 2 + 3)").0 {
+    let chunk = match compile("-(1 - 2 + 3)") {
         Ok(c) => c,
         Err(err) => panic!("{err}"),
     };

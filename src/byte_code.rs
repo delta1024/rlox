@@ -113,20 +113,12 @@ impl From<ChunkBuilder> for Chunk {
     }
 }
 pub(crate) struct CompilationResult(pub Result<Chunk, CompilerError>);
-impl FromIterator<Result<(OpCode, usize), CompilerError>> for CompilationResult {
-    fn from_iter<I: IntoIterator<Item = Result<(OpCode, usize), CompilerError>>>(
-        iter: I,
-    ) -> CompilationResult {
-        let b = iter.into_iter().collect::<Vec<_>>();
-        let mut builder = ChunkBuilder::new();
-        for i in b {
-            match i {
-                Ok((b, l)) => {
-                    builder = builder.write_byte(b, l as u8);
-                }
-                Err(err) => return CompilationResult(Err(err)),
-            }
-        }
-        CompilationResult(Ok(builder.into()))
+impl FromIterator<(OpCode, usize)> for Chunk {
+    fn from_iter<I: IntoIterator<Item = (OpCode, usize)>>(iter: I) -> Chunk {
+        iter.into_iter()
+            .fold(ChunkBuilder::new(), |mut x: ChunkBuilder, y| {
+                x.write_byte(y.0, y.1 as u8)
+            })
+            .into()
     }
 }
