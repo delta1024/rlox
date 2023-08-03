@@ -1,5 +1,9 @@
-use std::{iter::Peekable, ops::RangeInclusive, str::CharIndices};
-
+use std::{
+    iter::Peekable,
+    ops::{ControlFlow, RangeInclusive},
+    str::CharIndices,
+};
+#[derive(Debug)]
 pub struct ErrorToken {
     pub message: String,
     pub line: usize,
@@ -78,21 +82,29 @@ where
 {
     type Item = LexerResult<'a>;
     fn next(&mut self) -> Option<Self::Item> {
-        let Some((cur_pos, ch)) = self.chars.next() else {
+	let mut line = self.line;
+        let ControlFlow::Break(((cur_pos, ch), line)) = self.chars.try_for_each(move |x| {
+            if x.1 == ' ' || x.1 == '\r' || x.1 == '\t' {
+                ControlFlow::Continue(())
+            } else if x.1 == '\n' {
+		line += 1;
+		ControlFlow::Continue(())
+	    } else {
+                ControlFlow::Break((x,line))
+            }
+        }) else {
 	    return None;
 	};
-        let (token, pos) = match ch {
-            '(' => (
-                Token::new(
+	self.line = line;
+        self.start_pos = cur_pos;
+        let token = match ch {
+            '(' =>   Token::new(
                     TokenType::LeftParen,
                     &self.source[self.get_range(cur_pos)],
                     self.line,
                 ),
-                cur_pos + 1,
-            ),
             _ => todo!(),
         };
-        self.start_pos = pos;
         Some(Ok(token))
     }
 }
