@@ -1,4 +1,4 @@
-use crate::{frame::PositionCounter, value::Value};
+use crate::{compiler::CompilerError, frame::PositionCounter, value::Value};
 use std::fmt;
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 /// Internal Operation Code to be exacuted.
@@ -83,7 +83,7 @@ impl ChunkBuilder {
     pub(crate) fn new() -> Self {
         Self::default()
     }
-    pub(crate) fn write_byte(&mut self, op_code: OpCode, line: u8) {
+    pub(crate) fn write_byte(mut self, op_code: OpCode, line: u8) -> Self {
         match op_code {
             OpCode::Return
             | OpCode::Add
@@ -100,6 +100,7 @@ impl ChunkBuilder {
             }
         }
         self.lines.push(line);
+        self
     }
 }
 impl From<ChunkBuilder> for Chunk {
@@ -109,5 +110,22 @@ impl From<ChunkBuilder> for Chunk {
             lines: value.lines.into_boxed_slice(),
             values: value.values.into_boxed_slice(),
         }
+    }
+}
+pub(crate) struct CompilationResult(pub Result<Chunk, CompilerError>);
+impl FromIterator<Result<(OpCode, usize), CompilerError>> for CompilationResult {
+    fn from_iter<I: IntoIterator<Item = Result<(OpCode, usize), CompilerError>>>(
+        iter: I,
+    ) -> CompilationResult {
+        let b = iter.into_iter().collect::<Vec<_>>();
+	let mut builder = ChunkBuilder::new();
+	for i in b {
+	    match i {
+		Ok((b, l)) => {builder = builder.write_byte(b, l as u8);},
+		Err(err) => return CompilationResult(Err(err)),
+	    }
+	}
+	CompilationResult(Ok(builder.into()))
+
     }
 }

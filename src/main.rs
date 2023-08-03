@@ -47,7 +47,10 @@ fn main_loop(vm: &mut Vm, call_stack: &mut CallStack) -> Result<(), Box<dyn std:
     Ok(())
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let chunk = compile("1 - 2")?;
+    let chunk = match compile("-(1 - 2 + 3)").0 {
+	Ok(c) => c,
+	Err(err) => panic!("{err}"),
+    };
     let mut heap = Heap::new();
     let main_str = heap.allocate_string("_main");
     let main_fn = heap.allocate_object::<ObjFunction>(ObjFunction::new(main_str, chunk));

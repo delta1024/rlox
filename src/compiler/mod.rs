@@ -9,10 +9,10 @@ pub use parser::*;
 pub use precedence::*;
 
 use crate::{
-    byte_code::{Chunk, OpCode},
+    byte_code::{Chunk, OpCode, CompilationResult},
     lexer::{Lexer, TokenType},
 };
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CompilerError {
     NotRule,
     Scanner,
@@ -28,17 +28,18 @@ impl Display for CompilerError {
     }
 }
 
-pub(crate) fn compile(source: &str) -> Result<Chunk, CompilerError> {
+pub(crate) fn compile(source: &str) -> CompilationResult {
     let lexer = Lexer::new(source).peekable();
-    let mut parser = Parser::new(lexer);
+    let parser = Parser::new(lexer);
     //    parser.advance();
-    expression(&mut parser)?;
-    parser
-        .advance_if_eq(TokenType::Eof)
-        .map_err(|_| CompilerError::Scanner)?;
-    parser.end_compiler();
+    // expression(&mut parser)?;
+    // parser
+    //     .advance_if_eq(TokenType::Eof)
+    //     .map_err(|_| CompilerError::Scanner)?;
+    // parser.end_compiler();
 
-    Ok(parser.chunk.into())
+    // Ok(parser.chunk.into())
+    parser.collect()
 }
 fn parse_precedence<'a>(
     parser: &mut Parser<'a>,
@@ -83,7 +84,6 @@ fn grouping<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {
 
 fn unary<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {
     let op_type = parser.previous.as_ref().map(|t| t.id).unwrap();
-    dbg!(op_type);
     parse_precedence(parser, Precedence::Unary)?;
     match op_type {
         TokenType::Minus => parser.emit_byte(OpCode::Neg),

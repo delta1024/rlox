@@ -62,12 +62,12 @@ impl<'a> Token<'a> {
         Self { lexum, id, line }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct Lexer<'a> {
     source: &'a str,
     start_pos: usize,
     line: usize,
-    at_end: bool,
+    pub(crate)at_end: bool,
     chars: Peekable<CharIndices<'a>>,
 }
 
