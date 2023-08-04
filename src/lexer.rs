@@ -1,9 +1,9 @@
 use std::{
     iter::Peekable,
     ops::{ControlFlow, RangeInclusive},
-    str::CharIndices,
+    str::{CharIndices, FromStr},
 };
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ErrorToken {
     pub message: String,
     pub line: usize,
@@ -38,6 +38,65 @@ pub(crate) enum TokenType{
     Print,  Return,  Super,  This,
     True,  Var,  While,
 }
+
+impl FromStr for TokenType {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "(" => Self::LeftParen,
+            ")" => Self::RightParen,
+            "{" => Self::LeftBrace,
+            "}" => Self::RightBrace,
+            "," => Self::Comma,
+            "." => Self::Dot,
+            "-" => Self::Minus,
+            "+" => Self::Plus,
+            ";" => Self::Semicolon,
+            "/" => Self::Slash,
+            "*" => Self::Star,
+            "!" => Self::Bang,
+            "!=" => Self::BangEqual,
+            "=" => Self::Equal,
+            "==" => Self::EqualEqual,
+            ">" => Self::Greater,
+            ">=" => Self::GreaterEqual,
+            "<" => Self::Less,
+            "<=" => Self::LessEqual,
+            "and" => Self::And,
+            "class" => Self::Class,
+            "else" => Self::Else,
+            "false" => Self::False,
+            "for" => Self::For,
+            "fun" => Self::Fun,
+            "if" => Self::If,
+            "nil" => Self::Nil,
+            "or" => Self::Or,
+            "print" => Self::Print,
+            "return" => Self::Return,
+            "super" => Self::Super,
+            "this" => Self::This,
+            "true" => Self::True,
+            "var" => Self::Var,
+            "while" => Self::While,
+            _ if s.chars().peekable().next_if_eq(&'"').is_some()
+                && s.chars().last() == Some('"') =>
+            {
+                Self::String
+            }
+            _ if s.chars().try_for_each(|c| match c {
+                '0'..='9' => ControlFlow::Continue(()),
+                '_' => ControlFlow::Continue(()),
+                _ => ControlFlow::Break(()),
+            }) == ControlFlow::Continue(()) =>
+            {
+                Self::Number
+            }
+
+            _ => Self::Identifier,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Token<'a> {
     pub(crate) id: TokenType,
@@ -82,29 +141,116 @@ where
 {
     type Item = LexerResult<'a>;
     fn next(&mut self) -> Option<Self::Item> {
-	let mut line = self.line;
+        let mut line = self.line;
         let ControlFlow::Break(((cur_pos, ch), line)) = self.chars.try_for_each(move |x| {
-            if x.1 == ' ' || x.1 == '\r' || x.1 == '\t' {
-                ControlFlow::Continue(())
-            } else if x.1 == '\n' {
-		line += 1;
-		ControlFlow::Continue(())
-	    } else {
-                ControlFlow::Break((x,line))
-            }
+	    match x.1 {
+		' ' | '\r' | '\t' => ControlFlow::Continue(()),
+		'\n' => {
+		    line += 1;
+		    ControlFlow::Continue(())
+		}
+		_ => ControlFlow::Break((x, line)),
+	    }
         }) else {
 	    return None;
 	};
-	self.line = line;
+        self.line = line;
         self.start_pos = cur_pos;
         let token = match ch {
-            '(' =>   Token::new(
-                    TokenType::LeftParen,
-                    &self.source[self.get_range(cur_pos)],
+            '(' | ')' | '{' | '}' | ',' | '.' | '-' | '+' | ';' | '*' => Token::new(
+                self.source[self.get_range(cur_pos)].parse().unwrap(),
+                &self.source[self.get_range(cur_pos)],
+                self.line,
+            ),
+            '!' if self.chars.next_if(|x| x.1 == '=').is_some() => {
+                let range = self.get_range(cur_pos + 1);
+                self.start_pos += 1;
+                Token::new(
+                    self.source[range.clone()].parse().unwrap(),
+                    &self.source[range],
                     self.line,
-                ),
+                )
+            }
+            '>' if self.chars.next_if(|x| x.1 == '=').is_some() => {
+                let range = self.get_range(cur_pos + 1);
+                self.start_pos += 1;
+                Token::new(
+                    self.source[range.clone()].parse().unwrap(),
+                    &self.source[range],
+                    self.line,
+                )
+            }
+            '<' if self.chars.next_if(|x| x.1 == '=').is_some() => {
+                let range = self.get_range(cur_pos + 1);
+                self.start_pos += 1;
+                Token::new(
+                    self.source[range.clone()].parse().unwrap(),
+                    &self.source[range],
+                    self.line,
+                )
+            }
+            '=' if self.chars.next_if(|x| x.1 == '=').is_some() => {
+                let range = self.get_range(cur_pos + 1);
+                self.start_pos += 1;
+                Token::new(
+                    self.source[range.clone()].parse().unwrap(),
+                    &self.source[range],
+                    self.line,
+                )
+            }
+	    '!' | '>' | '<' | '=' => Token::new(
+		self.source[self.get_range(cur_pos)].parse().unwrap(),
+		&self.source[self.get_range(cur_pos)],
+		self.line
+	    ),
             _ => todo!(),
         };
         Some(Ok(token))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn single_char_token() {
+        let source = "() {} , . - + ; *";
+        let expected: Vec<Result<Token<'_>, ErrorToken>> = vec![
+            Token::new(TokenType::LeftParen, "(", 1),
+            Token::new(TokenType::RightParen, ")", 1),
+            Token::new(TokenType::LeftBrace, "{", 1),
+            Token::new(TokenType::RightBrace, "}", 1),
+            Token::new(TokenType::Comma, ",", 1),
+            Token::new(TokenType::Dot, ".", 1),
+            Token::new(TokenType::Minus, "-", 1),
+            Token::new(TokenType::Plus, "+", 1),
+            Token::new(TokenType::Semicolon, ";", 1),
+            Token::new(TokenType::Star, "*", 1),
+        ]
+        .into_iter()
+        .map(Ok)
+        .collect();
+        let lexer = Lexer::new(source);
+        assert_eq!(expected, lexer.collect::<Vec<_>>());
+    }
+    #[test]
+    fn multi_char_token() {
+        let source = "!!=>>==<<===";
+        let expected: Vec<Result<Token<'_>, ErrorToken>> = vec![
+            Token::new(TokenType::Bang, "!", 1),
+            Token::new(TokenType::BangEqual, "!=", 1),
+            Token::new(TokenType::Greater, ">", 1),
+            Token::new(TokenType::GreaterEqual, ">=", 1),
+            Token::new(TokenType::Equal, "=", 1),
+            Token::new(TokenType::Less, "<", 1),
+            Token::new(TokenType::LessEqual, "<=", 1),
+            Token::new(TokenType::EqualEqual, "==", 1),
+        ]
+        .into_iter()
+        .map(Ok)
+        .collect();
+        let lexer = Lexer::new(source);
+        assert_eq!(expected, lexer.collect::<Vec<_>>());
     }
 }
