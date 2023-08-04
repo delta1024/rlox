@@ -83,11 +83,14 @@ impl FromStr for TokenType {
             {
                 Self::String
             }
-            _ if s.chars().try_for_each(|c| match c {
-                '0'..='9' => ControlFlow::Continue(()),
-                '_' => ControlFlow::Continue(()),
-                _ => ControlFlow::Break(()),
-            }) == ControlFlow::Continue(()) =>
+            _ if s
+                .chars()
+                .try_for_each(|c| match c {
+                    '0'..='9' => ControlFlow::Continue(()),
+                    '.' => ControlFlow::Continue(()),
+                    _ => ControlFlow::Break(()),
+                })
+                .is_continue() =>
             {
                 Self::Number
             }
@@ -125,10 +128,6 @@ impl<'a> Lexer<'a> {
             line: 1,
             chars: source.char_indices().peekable(),
         }
-    }
-    #[inline(always)]
-    fn at_end(&mut self) -> bool {
-        self.chars.peek().is_none()
     }
     #[inline(always)]
     fn get_range(&self, top: usize) -> RangeInclusive<usize> {
@@ -198,12 +197,78 @@ where
                     self.line,
                 )
             }
-	    '!' | '>' | '<' | '=' => Token::new(
-		self.source[self.get_range(cur_pos)].parse().unwrap(),
-		&self.source[self.get_range(cur_pos)],
-		self.line
-	    ),
-            _ => todo!(),
+            '/' if self.chars.next_if(|x| x.1 == '/').is_some() => {
+                let ControlFlow::Break(pos) = self.chars.try_for_each(|x| match x.1 {
+		    '\n' => ControlFlow::Break(x.0),
+		    _ => ControlFlow::Continue(()),
+		}) else {
+		    return None;
+		};
+                self.line += 1;
+                self.start_pos = pos + 1;
+                return self.next();
+            }
+            '!' | '>' | '<' | '=' | '/' => Token::new(
+                self.source[self.get_range(cur_pos)].parse().unwrap(),
+                &self.source[self.get_range(cur_pos)],
+                self.line,
+            ),
+            '0'..='9' => {
+                let pos = match self.chars.try_for_each(|x| match x.1 {
+                    '0'..='9' => ControlFlow::Continue(()),
+                    '.' => ControlFlow::Continue(()),
+                    _ => ControlFlow::Break(x.0),
+                }) {
+                    ControlFlow::Break(n) => n - 1,
+                    ControlFlow::Continue(()) => return None,
+                };
+                let range = self.get_range(pos);
+                Token::new(
+                    self.source[range.clone()].parse().unwrap(),
+                    &self.source[range],
+                    self.line,
+                )
+            }
+            'a'..='z' | 'A'..='Z' => {
+                let pos = match self.chars.try_for_each(|x| match x.1 {
+                    'a'..='z' | 'A'..='Z' | '_' | '0'..='9' => ControlFlow::Continue(()),
+                    _ => ControlFlow::Break(x.0),
+                }) {
+                    ControlFlow::Break(n) => n - 1,
+                    ControlFlow::Continue(()) => return None,
+                };
+                let range = self.get_range(pos);
+                Token::new(
+                    self.source[range.clone()].parse().unwrap(),
+                    &self.source[range],
+                    self.line,
+                )
+            }
+            '"' => {
+                let mut line = self.line;
+                let pos = match self.chars.try_for_each(|x| match x.1 {
+                    '"' => ControlFlow::Break(x.0),
+                    '\n' => {
+                        line += 1;
+                        ControlFlow::Continue(())
+                    }
+                    _ => ControlFlow::Continue(()),
+                }) {
+                    ControlFlow::Break(x) => x,
+                    ControlFlow::Continue(()) => {
+                        // We have an unterminated string.
+                        return Some(Err(ErrorToken::new("Unterminated string.", self.line)));
+                    }
+                };
+                self.line = line;
+                let range = self.get_range(pos);
+                Token::new(
+                    self.source[range.clone()].parse().unwrap(),
+                    &self.source[range],
+                    self.line,
+                )
+            }
+            _ => unreachable!(),
         };
         Some(Ok(token))
     }
@@ -215,7 +280,7 @@ mod test {
 
     #[test]
     fn single_char_token() {
-        let source = "() {} , . - + ; *";
+        let source = "() {} , . - + ; * / ";
         let expected: Vec<Result<Token<'_>, ErrorToken>> = vec![
             Token::new(TokenType::LeftParen, "(", 1),
             Token::new(TokenType::RightParen, ")", 1),
@@ -227,6 +292,7 @@ mod test {
             Token::new(TokenType::Plus, "+", 1),
             Token::new(TokenType::Semicolon, ";", 1),
             Token::new(TokenType::Star, "*", 1),
+            Token::new(TokenType::Slash, "/", 1),
         ]
         .into_iter()
         .map(Ok)
@@ -252,5 +318,65 @@ mod test {
         .collect();
         let lexer = Lexer::new(source);
         assert_eq!(expected, lexer.collect::<Vec<_>>());
+    }
+    #[test]
+    fn number() {
+        let input = "123 123.456";
+        let test_results = ["123", "123.456"]
+            .into_iter()
+            .map(|x| Token::new(TokenType::Number, x, 1))
+            .map(Ok)
+            .collect::<Vec<Result<Token, ErrorToken>>>();
+        let lexer = Lexer::new(input);
+        for (expected, got) in test_results.into_iter().zip(lexer) {
+            assert_eq!(expected, got);
+        }
+    }
+    #[test]
+    fn comments() {
+        let input = "// this is a comment\n*";
+        let mut lexer = Lexer::new(input);
+        assert_eq!(Some(Ok(Token::new(TokenType::Star, "*", 2))), lexer.next())
+    }
+    #[test]
+    fn identifiers() {
+        let input =
+            "and class else false for fun if nil or print return super this true var while me";
+        let expexted_token = [
+            TokenType::And,
+            TokenType::Class,
+            TokenType::Else,
+            TokenType::False,
+            TokenType::For,
+            TokenType::Fun,
+            TokenType::If,
+            TokenType::Nil,
+            TokenType::Or,
+            TokenType::Print,
+            TokenType::Return,
+            TokenType::Super,
+            TokenType::This,
+            TokenType::True,
+            TokenType::Var,
+            TokenType::While,
+            TokenType::Identifier,
+        ];
+        let expected = input
+            .split_whitespace()
+            .zip(expexted_token.into_iter())
+            .map(|x| Token::new(x.1, x.0, 1))
+            .map(Ok)
+            .collect::<Vec<LexerResult>>();
+        let lexer = Lexer::new(input);
+        for (expected, got) in expected.into_iter().zip(lexer) {
+            assert_eq!(expected, got);
+        }
+    }
+    #[test]
+    fn string() {
+        let input = "\"hello\"";
+        let expected = Token::new(TokenType::String, "\"hello\"", 1);
+
+        assert_eq!(Some(Ok(expected)), Lexer::new(input).next());
     }
 }
