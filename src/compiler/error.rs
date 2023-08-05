@@ -1,46 +1,46 @@
 use std::fmt::Display;
 
-use crate::lexer::{ErrorToken, Token};
+use crate::lexer::{ErrorToken, Token, TokenType};
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompilerError<'a> {
+pub struct CompilerError {
     at_end: bool,
-    token: Result<Token<'a>, usize>,
+    id: TokenType,
+    lexum: String,
+    line: usize,
     message: String,
 }
 
-impl<'a> CompilerError<'a> {
+impl<'a> CompilerError {
     pub(crate) fn new(at_end: bool, token: Token<'a>, message: impl ToString) -> Self {
         Self {
             at_end,
-            token: Ok(token),
+            id: token.id,
+            lexum: token.lexum.to_string(),
+            line: token.line,
             message: message.to_string(),
-        }
-    }
-    pub fn get_line(&self) -> usize {
-        match self.token.as_ref() {
-            Ok(t) => t.line,
-            Err(l) => *l,
         }
     }
 }
 
-impl<'a> Display for CompilerError<'a> {
+impl<'a> Display for CompilerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[line {}] Error", self.get_line())?;
+        write!(f, "[line {}] Error", self.line)?;
         if self.at_end {
             write!(f, " at end")?;
-        } else if let Ok(t) = self.token.as_ref() {
-            write!(f, " at '{}'", t.lexum)?;
+        } else {
+            write!(f, " at '{}'", self.lexum)?;
         }
         write!(f, ": {}", self.message)
     }
 }
 
-impl<'a> From<ErrorToken> for CompilerError<'a> {
+impl<'a> From<ErrorToken> for CompilerError {
     fn from(value: ErrorToken) -> Self {
         Self {
             at_end: false,
-            token: Err(value.line),
+            id: TokenType::None,
+            line: value.line,
+            lexum: String::new(),
             message: value.message,
         }
     }

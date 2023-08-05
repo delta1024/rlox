@@ -3,7 +3,7 @@ use std::{
     ops::{ControlFlow, RangeInclusive},
     str::{CharIndices, FromStr},
 };
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ErrorToken {
     pub message: String,
     pub line: usize,
@@ -37,6 +37,8 @@ pub(crate) enum TokenType{
     For,  Fun,  If,  Nil,  Or,
     Print,  Return,  Super,  This,
     True,  Var,  While,
+
+    None
 }
 
 impl FromStr for TokenType {
@@ -107,6 +109,12 @@ pub(crate) struct Token<'a> {
     pub(crate) line: usize,
 }
 
+impl<'a> Default for Token<'a> {
+    fn default() -> Self {
+        Token::new(TokenType::None, "", 0)
+    }
+}
+
 impl<'a> Token<'a> {
     pub(crate) fn new(id: TokenType, lexum: &'a str, line: usize) -> Self {
         Self { id, lexum, line }
@@ -116,7 +124,7 @@ impl<'a> Token<'a> {
 pub(crate) struct Lexer<'a> {
     source: &'a str,
     start_pos: usize,
-    line: usize,
+    pub(crate) line: usize,
     chars: Peekable<CharIndices<'a>>,
 }
 
@@ -214,13 +222,20 @@ where
                 self.line,
             ),
             '0'..='9' => {
+                let mut s = 0;
                 let pos = match self.chars.try_for_each(|x| match x.1 {
-                    '0'..='9' => ControlFlow::Continue(()),
-                    '.' => ControlFlow::Continue(()),
+                    '0'..='9' => {
+                        s += 1;
+                        ControlFlow::Continue(())
+                    }
+                    '.' => {
+                        s += 1;
+                        ControlFlow::Continue(())
+                    }
                     _ => ControlFlow::Break(x.0),
                 }) {
                     ControlFlow::Break(n) => n - 1,
-                    ControlFlow::Continue(()) => return None,
+                    ControlFlow::Continue(()) => cur_pos + s,
                 };
                 let range = self.get_range(pos);
                 Token::new(
