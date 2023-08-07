@@ -10,6 +10,7 @@ pub struct CompilerError {
     message: String,
 }
 
+impl std::error::Error for CompilerError {}
 impl<'a> CompilerError {
     pub(crate) fn new(at_end: bool, token: Token<'a>, message: impl ToString) -> Self {
         Self {

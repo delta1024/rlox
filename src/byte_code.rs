@@ -83,14 +83,14 @@ pub(crate) struct Chunk {
 }
 
 impl Chunk {
-    fn get_instruction(&self, pos: PositionCounter) -> (OpCode, PositionCounter) {
+    pub(crate) fn get_instruction(&self, pos: PositionCounter) -> (OpCode, PositionCounter) {
         let n = self.code[*pos];
         match n {
-            0 => (n.into(), pos + 1),
+            0 | 2..=6 => (n.into(), 1.into()),
             1 => {
                 let p = self.code[*pos + 1] as usize;
                 let v = self.values[p];
-                (OpCode::Constant(v), pos + 2)
+                (OpCode::Constant(v), 2.into())
             }
             _ => unreachable!(),
         }

@@ -1,10 +1,18 @@
+use crate::byte_code::{Chunk, OpCode};
+
+use self::pc::PositionCounter;
+
 pub(crate) mod pc {
     use std::ops::{Add, AddAssign, Deref, DerefMut};
 
     #[repr(transparent)]
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
     pub(crate) struct PositionCounter(usize);
-
+    impl From<usize> for PositionCounter {
+	fn from(value: usize) -> Self {
+	    Self(value)
+	}
+    }
     impl Deref for PositionCounter {
         type Target = usize;
         fn deref(&self) -> &Self::Target {
@@ -27,5 +35,24 @@ pub(crate) mod pc {
             let n = *self + *rhs;
             *self = n;
         }
+    }
+}
+
+pub(crate) struct CallFrame<'a> {
+    chunk: &'a Chunk,
+    position_conunter: PositionCounter,
+}
+
+impl<'a> CallFrame<'a> {
+pub(crate)    fn new(chunk: &'a Chunk) -> Self {
+	Self{
+	    chunk,
+	    position_conunter: 0.into(),
+	}
+}
+    pub(crate) fn advance_position(&mut self) -> OpCode {
+	let (op, pos) = self.chunk.get_instruction(self.position_conunter);
+	self.position_conunter += pos;
+	op
     }
 }
