@@ -245,12 +245,16 @@ where
                 )
             }
             'a'..='z' | 'A'..='Z' => {
+		let mut s = 0;
                 let pos = match self.chars.try_for_each(|x| match x.1 {
-                    'a'..='z' | 'A'..='Z' | '_' | '0'..='9' => ControlFlow::Continue(()),
+                    'a'..='z' | 'A'..='Z' | '_' | '0'..='9' => {
+			s += 1;
+			ControlFlow::Continue(())
+		    },
                     _ => ControlFlow::Break(x.0),
                 }) {
                     ControlFlow::Break(n) => n - 1,
-                    ControlFlow::Continue(()) => return None,
+                    ControlFlow::Continue(()) => cur_pos + s,
                 };
                 let range = self.get_range(pos);
                 Token::new(

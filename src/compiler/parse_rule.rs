@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 
 use crate::lexer::TokenType;
 
-use super::{binary, grouping, number, unary, CompilerError, Parser, Precedence};
+use super::{binary, grouping, number, unary, CompilerError, Parser, Precedence, literal};
 
 pub(super) type ParseFn = fn(&mut Parser) -> Result<(), CompilerError>;
 
@@ -58,6 +58,10 @@ impl GetRule for TokenType {
                 prefix: Some(number),
                 ..Default::default()
             }),
+	    Self::Nil | Self::True |Self::False => Some(ParseRule{
+		prefix: Some(literal),
+		..Default::default()
+	    }),
             _ => None,
         }
     }

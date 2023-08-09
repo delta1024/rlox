@@ -8,7 +8,7 @@ use parse_rule::*;
 pub(crate) use parser::*;
 use precedence::*;
 
-use crate::{byte_code::OpCode, lexer::TokenType};
+use crate::{byte_code::OpCode, lexer::TokenType, value::Value};
 
 fn parse_precedence<'a>(parser: &mut Parser<'a>, prec: Precedence) -> Result<(), CompilerError> {
     parser.advance()?;
@@ -52,6 +52,16 @@ fn unary<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {
     match op_type {
         TokenType::Minus => parser.emit_byte(OpCode::Neg),
         _ => unreachable!(),
+    }
+    Ok(())
+}
+fn literal<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {
+    match parser.previous.id {
+	TokenType::False => parser.emit_byte(OpCode::False),
+	TokenType::True => parser.emit_byte(OpCode::True),
+	TokenType::Nil => parser.emit_byte(OpCode::Nil),
+	_ => unreachable!(),
+	
     }
     Ok(())
 }

@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::Not};
 
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub(crate) enum Value {
@@ -18,6 +18,17 @@ impl From <bool> for Value {
 	Self::Bool(value)
     }
 
+}
+impl Not for Value {
+    type Output = bool;
+    fn not(self) -> Self::Output {
+	match self {
+	    Self::Nil => true,
+	    Self::Bool(b) => !b,
+	    Self::Number(_) => false
+		
+	}
+    }
 }
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

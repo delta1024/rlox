@@ -1,6 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::byte_code::OpCode;
+use crate::value::Value;
 use super::vm::{BinaryOp, UnaryOp, Vm, VmResult};
 use super::RuntimeState;
 
@@ -40,6 +41,9 @@ pub(crate) fn interpret_instruction<'a, 'b>(
             };
             state.get_vm().push(v);
         }
+	OpCode::Nil => state.get_vm().push(Value::Nil),
+	OpCode::True => state.get_vm().push(true.into()),
+	OpCode::False => state.get_vm().push(false.into()),
         OpCode::Return => {
             println!("{}", state.get_vm().pop().unwrap());
             return ControlFlow::Break(Ok(()));
