@@ -1,11 +1,7 @@
 use std::ops::ControlFlow;
 
-use crate::{
-    byte_code::OpCode,
-    frame::CallFrame,
-    vm::{BinaryOp, UnaryOp, Vm, VmResult},
-};
-
+use crate::byte_code::OpCode;
+use super::vm::{BinaryOp, UnaryOp, Vm, VmResult};
 use super::RuntimeState;
 
 pub(crate) fn interpret_instruction<'a, 'b>(
@@ -15,22 +11,31 @@ pub(crate) fn interpret_instruction<'a, 'b>(
     match op_code {
         OpCode::Constant(v) => state.get_vm().push(v),
         OpCode::Add | OpCode::Sub | OpCode::Mul | OpCode::Div => {
-            let (Some(b), Some(a)) = (state.get_vm().pop(), state.get_vm().pop()) else {
-		unreachable!()
-	    };
-            let v = match state
-                .get_vm()
-                .binary_instruction(BinaryOp::new(op_code, a, b))
+            let (b, a) = (
+                *state.get_vm().stack.peek(1).unwrap(),
+                *state.get_vm().stack.peek(0).unwrap(),
+            );
+            let v = match Vm::
+                binary_instruction(state,BinaryOp::new(op_code, a, b))
             {
-                Ok(v) => v,
+                Ok(v) => {
+                    (0..=1).for_each(|_| {
+                        _ = state.get_vm().stack.pop();
+                    });
+                    v
+                }
                 Err(e) => return ControlFlow::Break(Err(e)),
             };
+
             state.get_vm().push(v);
         }
         OpCode::Neg => {
-            let v = state.get_vm().pop().unwrap();
-            let v = match state.get_vm().unary_instruction(UnaryOp::new(op_code, v)) {
-                Ok(v) => v,
+            let v = *state.get_vm().stack.peek(0).unwrap();
+            let v = match Vm::unary_instruction(state, UnaryOp::new(op_code, v)) {
+                Ok(v) => {
+                    _ = state.get_vm().stack.pop();
+                    v
+                }
                 Err(err) => return ControlFlow::Break(Err(err)),
             };
             state.get_vm().push(v);

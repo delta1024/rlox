@@ -1,12 +1,13 @@
 pub mod error;
+pub(crate) mod vm;
 pub(crate) mod interpret;
 pub use error::*;
 pub(crate) use interpret::*;
-
+use vm::Vm;
 use crate::{
     byte_code::OpCode,
     frame::{pc::PositionCounter, CallFrame},
-    vm::Vm,
+
 };
 pub(crate) struct RuntimeState<'a, 'b> {
     position: PositionCounter,

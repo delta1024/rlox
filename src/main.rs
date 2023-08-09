@@ -5,18 +5,17 @@ use compiler::{CompilerError, Parser};
 use frame::CallFrame;
 use lexer::Lexer;
 use run_time::{RuntimeError, RuntimeState};
-use vm::Vm;
 mod byte_code;
 mod compiler;
 mod frame;
 mod lexer;
 mod run_time;
 mod stack;
-mod vm;
+use run_time::vm::Vm;
 
-mod value {
-    pub(crate) type Value = i64;
-}
+mod value; 
+
+
 
 fn main_loop<'a>(vm: &mut Vm, call_frame: &mut CallFrame<'a>) -> Result<(), RuntimeError> {
     let mut state = RuntimeState::new(vm, call_frame);

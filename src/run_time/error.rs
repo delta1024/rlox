@@ -1,6 +1,6 @@
 use std::{fmt::Display, ops::ControlFlow};
 
-use crate::vm::VmResult;
+use super::vm::VmResult;
 
 use super::RuntimeState;
 
@@ -22,12 +22,12 @@ impl Display for RuntimeError {
 }
 impl std::error::Error for RuntimeError {}
 
-pub(crate) fn runtime_error<'a, 'b>(
+pub(crate) fn runtime_error<'a,'b,T>(
     state: &mut RuntimeState<'a, 'b>,
-    message: String,
-) -> ControlFlow<VmResult<()>> {
+    message: impl ToString,
+) -> VmResult<T>{
     let pos = state.get_position();
     let line = state.get_frames().chunk.get_line(pos).unwrap();
     state.get_vm().stack.reset();
-    ControlFlow::Break(Err(RuntimeError { message, line }))
+    Err(RuntimeError { message: message.to_string(), line })
 }

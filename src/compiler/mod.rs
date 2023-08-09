@@ -37,7 +37,7 @@ fn expression<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {
 }
 fn number<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {
     let num = parser.previous.lexum.parse::<i64>().unwrap();
-    parser.emit_byte(OpCode::Constant(num));
+    parser.emit_byte(OpCode::Constant(num.into()));
     Ok(())
 }
 fn grouping<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {

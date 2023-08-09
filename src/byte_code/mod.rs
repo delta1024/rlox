@@ -16,7 +16,7 @@ impl From<u8> for OpCode {
     fn from(value: u8) -> Self {
         match value {
             0 => Self::Return,
-            1 => Self::Constant(0),
+            1 => Self::Constant(Value::default()),
             2 => Self::Add,
             3 => Self::Sub,
             4 => Self::Mul,

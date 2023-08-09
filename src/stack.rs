@@ -2,7 +2,7 @@ use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 pub(crate) const STACK_MAX: usize = 256;
 #[repr(transparent)]
-#[derive(Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct StackTop(usize);
 
 impl From<usize> for StackTop {
@@ -32,6 +32,7 @@ impl SubAssign for StackTop {
         self.0 -= rhs.0;
     }
 }
+#[derive(Debug)]
 pub(crate) struct Stack<T: Copy> {
     stack_top: StackTop,
     data: [Option<T>; STACK_MAX],
@@ -58,6 +59,13 @@ impl<T: Copy> Stack<T> {
             self.stack_top -= 1.into();
         }
         self.data[self.stack_top.0].take()
+    }
+    pub(crate) fn peek(&self, span: usize) -> Option<&T> {
+        if self.stack_top >= span.into() && self.stack_top > 0.into() {
+            self.data[self.stack_top - 1 - span].as_ref()
+        } else {
+            None
+        }
     }
     pub(crate) fn reset(&mut self) {
         self.stack_top = 0.into();

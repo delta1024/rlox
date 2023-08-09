@@ -1,6 +1,11 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::ControlFlow};
 
-use crate::{byte_code::OpCode, run_time::RuntimeError, stack::Stack, value::Value};
+use crate::{
+    byte_code::OpCode,
+    run_time::{self, runtime_error, RuntimeError, RuntimeState},
+    stack::Stack,
+    value::Value,
+};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum BinaryOp {
     Add(Value, Value),
@@ -53,17 +58,26 @@ impl Vm {
     pub(crate) fn pop(&mut self) -> Option<Value> {
         self.stack.pop()
     }
-    pub(crate) fn binary_instruction(&mut self, instruction: BinaryOp) -> VmResult<Value> {
-        Ok(match instruction {
-            BinaryOp::Add(a, b) => a + b,
-            BinaryOp::Sub(a, b) => a - b,
-            BinaryOp::Mul(a, b) => a * b,
-            BinaryOp::Div(a, b) => a / b,
-        })
+    pub(crate) fn binary_instruction<'a, 'b>(
+        state: &mut RuntimeState<'a, 'b>,
+        instruction: BinaryOp,
+    ) -> VmResult<Value> {
+        let num = match instruction {
+            BinaryOp::Add(Value::Number(a), Value::Number(b)) => a + b,
+            BinaryOp::Sub(Value::Number(a), Value::Number(b)) => a - b,
+            BinaryOp::Mul(Value::Number(a), Value::Number(b)) => a * b,
+            BinaryOp::Div(Value::Number(a), Value::Number(b)) => a / b,
+            _ => return runtime_error(state, "Operands must be two numbers."),
+        };
+        Ok(Value::Number(num))
     }
-    pub(crate) fn unary_instruction(&mut self, instruction: UnaryOp) -> VmResult<Value> {
+    pub(crate) fn unary_instruction<'a, 'b>(
+        state: &mut RuntimeState<'a,'b> ,
+        instruction: UnaryOp,
+    ) -> VmResult<Value> {
         Ok(match instruction {
-            UnaryOp::Negate(a) => -a,
+            UnaryOp::Negate(Value::Number(a)) => Value::Number(-a),
+            _ => panic!("This is not a number"),
         })
     }
 }
