@@ -3,7 +3,6 @@ mod parse_rule;
 pub(crate) mod parser;
 mod precedence;
 
-
 pub use error::*;
 use parse_rule::*;
 pub(crate) use parser::*;

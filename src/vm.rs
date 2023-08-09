@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{byte_code::OpCode, stack::Stack, value::Value};
+use crate::{byte_code::OpCode, run_time::RuntimeError, stack::Stack, value::Value};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum BinaryOp {
     Add(Value, Value),
@@ -33,19 +33,10 @@ impl UnaryOp {
     }
 }
 
-#[derive(Clone, Default, Debug)]
-pub struct VmError(String);
-impl Display for VmError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-	write!(f, "{}", self.0)
-    }
-}
-impl std::error::Error for VmError {}
-
-pub type VmResult<T> = std::result::Result<T, VmError>;
+pub type VmResult<T> = std::result::Result<T, RuntimeError>;
 
 pub(crate) struct Vm {
-    stack: Stack<Value>,
+    pub(crate) stack: Stack<Value>,
 }
 
 impl Vm {
@@ -56,11 +47,11 @@ impl Vm {
     }
     #[inline(always)]
     pub(crate) fn push(&mut self, value: Value) {
-	self.stack.push(value);
+        self.stack.push(value);
     }
     #[inline(always)]
     pub(crate) fn pop(&mut self) -> Option<Value> {
-	self.stack.pop()
+        self.stack.pop()
     }
     pub(crate) fn binary_instruction(&mut self, instruction: BinaryOp) -> VmResult<Value> {
         Ok(match instruction {
@@ -71,8 +62,8 @@ impl Vm {
         })
     }
     pub(crate) fn unary_instruction(&mut self, instruction: UnaryOp) -> VmResult<Value> {
-	Ok(match instruction{
-	    UnaryOp::Negate(a) => -a,
-	})
+        Ok(match instruction {
+            UnaryOp::Negate(a) => -a,
+        })
     }
 }

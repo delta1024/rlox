@@ -69,7 +69,7 @@ impl ChunkBuilder {
                 self.values.push(c);
                 let pos = self.values.len() as u8 - 1;
                 self.code.push(byte.into());
-		self.lines.push(line as u8);
+                self.lines.push(line as u8);
                 self.code.push(pos);
                 self.lines.push(line as u8);
             }
@@ -98,7 +98,7 @@ impl Chunk {
         }
     }
     pub(crate) fn get_line(&self, pos: PositionCounter) -> Option<u8> {
-	self.lines.get(pos)
+        self.lines.get(pos)
     }
 }
 impl From<ChunkBuilder> for Chunk {

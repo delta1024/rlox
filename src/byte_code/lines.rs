@@ -77,6 +77,5 @@ mod test {
         assert_eq!(Some(1), lines.get(pos));
         pos = pos + 1;
         assert_eq!(Some(2), lines.get(pos));
-        
     }
 }

@@ -45,7 +45,7 @@ pub(crate) mod pc {
 }
 
 pub(crate) struct CallFrame<'a> {
-    chunk: &'a Chunk,
+    pub(crate) chunk: &'a Chunk,
     pub(crate) position_conunter: PositionCounter,
 }
 
