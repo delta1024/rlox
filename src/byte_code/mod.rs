@@ -1,5 +1,6 @@
 use crate::{frame::pc::PositionCounter, value::Value};
-
+pub(crate) mod lines;
+pub(crate) use lines::*;
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum OpCode {
     Return,
@@ -42,7 +43,7 @@ impl From<OpCode> for u8 {
 pub(crate) struct ChunkBuilder {
     code: Vec<u8>,
     values: Vec<Value>,
-    lines: Vec<u8>,
+    lines: LinesBuilder,
 }
 
 impl ChunkBuilder {
@@ -50,7 +51,7 @@ impl ChunkBuilder {
         Self {
             code: Vec::new(),
             values: Vec::new(),
-            lines: Vec::new(),
+            lines: LinesBuilder::new(),
         }
     }
     pub(crate) fn write_byte(mut self, byte: OpCode, line: usize) -> Self {
@@ -68,6 +69,7 @@ impl ChunkBuilder {
                 self.values.push(c);
                 let pos = self.values.len() as u8 - 1;
                 self.code.push(byte.into());
+		self.lines.push(line as u8);
                 self.code.push(pos);
                 self.lines.push(line as u8);
             }
@@ -79,7 +81,7 @@ impl ChunkBuilder {
 pub(crate) struct Chunk {
     code: Box<[u8]>,
     values: Box<[Value]>,
-    lines: Box<[u8]>,
+    lines: Lines,
 }
 
 impl Chunk {
@@ -95,13 +97,16 @@ impl Chunk {
             _ => unreachable!(),
         }
     }
+    pub(crate) fn get_line(&self, pos: PositionCounter) -> Option<u8> {
+	self.lines.get(pos)
+    }
 }
 impl From<ChunkBuilder> for Chunk {
     fn from(value: ChunkBuilder) -> Self {
         Self {
             code: value.code.into_boxed_slice(),
             values: value.values.into_boxed_slice(),
-            lines: value.lines.into_boxed_slice(),
+            lines: value.lines.finalize(),
         }
     }
 }
