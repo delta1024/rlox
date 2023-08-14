@@ -1,8 +1,8 @@
-use std::{collections::VecDeque, iter::Peekable, ops::ControlFlow};
+use std::{collections::VecDeque, iter::Peekable};
 
 use crate::{
     byte_code::OpCode,
-    lexer::{Lexer, LexerResult, Token, TokenType},
+    lexer::{Lexer, Token, TokenType}, error_at_current,
 };
 
 use super::{expression, CompilerError};
@@ -106,11 +106,7 @@ impl<'a> Parser<'a> {
         if self.is_current(|t| t.id == id) {
             self.advance()
         } else {
-            Err(CompilerError::new(
-                self.current,
-                message,
-                self.current.map(|t| t.line).unwrap_or_default(),
-            ))
+	    error_at_current!(self, "{}", message.to_string())
         }
     }
     pub(crate) fn advance_if_at_end(

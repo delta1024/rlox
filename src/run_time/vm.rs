@@ -1,10 +1,9 @@
-use std::{fmt::Display, ops::ControlFlow};
-
 use crate::{
     byte_code::OpCode,
-    run_time::{self, runtime_error, RuntimeError, RuntimeState},
+    run_time::{RuntimeError, RuntimeState},
     stack::Stack,
     value::Value,
+    runtime_error
 };
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum BinaryOp {
@@ -67,7 +66,7 @@ impl Vm {
             BinaryOp::Sub(Value::Number(a), Value::Number(b)) => a - b,
             BinaryOp::Mul(Value::Number(a), Value::Number(b)) => a * b,
             BinaryOp::Div(Value::Number(a), Value::Number(b)) => a / b,
-            _ => return runtime_error(state, "Operands must be two numbers."),
+            _ => return runtime_error!(state, "Operands must be two numbers."),
         };
         Ok(Value::Number(num))
     }
@@ -77,7 +76,7 @@ impl Vm {
     ) -> VmResult<Value> {
         Ok(match instruction {
             UnaryOp::Negate(Value::Number(a)) => Value::Number(-a),
-            _ => panic!("This is not a number"),
+            _ => return runtime_error!(state, "Operand must be a number"),
         })
     }
 }

@@ -1,9 +1,11 @@
+use crate::error;
 pub mod error;
 mod parse_rule;
 pub(crate) mod parser;
 mod precedence;
 
-pub use error::*;
+pub use self::error::*;
+
 use parse_rule::*;
 pub(crate) use parser::*;
 use precedence::*;
@@ -14,7 +16,7 @@ fn parse_precedence<'a>(parser: &mut Parser<'a>, prec: Precedence) -> Result<(),
     parser.advance()?;
     let Some(parse_rule) = parser.map_previous(|t| t.id.get_rule().map(|r| r.prefix).flatten()).flatten() else {
 
-	return Err(CompilerError::new(parser.map_previous(|t| *t), "Expect expression.", parser.map_previous(|t| t.line).unwrap_or_default())); 
+	return error!(parser, "Expect expression.");
     };
     parse_rule(parser)?;
 
@@ -28,7 +30,7 @@ fn parse_precedence<'a>(parser: &mut Parser<'a>, prec: Precedence) -> Result<(),
             .map_previous(|t| t.id.get_rule().map(|r| r.infix).flatten())
             .flatten()
             .unwrap();
-	infix_rule(parser)?;
+        infix_rule(parser)?;
     }
     Ok(())
 }

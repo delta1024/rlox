@@ -1,7 +1,25 @@
 use std::fmt::Display;
 
 use crate::lexer::{ErrorToken, Token, TokenType};
-
+#[macro_export]
+macro_rules! error {
+    ($parser:expr, $($arg:tt)*) => {
+	 Err(CompilerError::new(
+	    $parser.map_previous(|t| *t),
+	    std::format_args!($($arg)*),
+	    $parser.map_previous(|t| t.line).unwrap_or_default()))
+    };
+}
+#[macro_export]
+macro_rules! error_at_current {
+    ($parser:expr, $($arg:tt)*) => {
+	return Err(CompilerError::new(
+	    $parser.map_current(|t| *t),
+	    std::format_args!($($arg)*),
+	    $parser.map_current(|t| t.line).unwrap_or_default()))
+    }
+	
+}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilerError {
     token: Option<ErrorToken>,
