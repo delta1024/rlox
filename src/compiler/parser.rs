@@ -11,13 +11,27 @@ pub(crate) struct Parser<'a> {
     previous: Option<Token<'a>>,
     current: Option<Token<'a>>,
     lexer: Peekable<Lexer<'a>>,
-    que: VecDeque<Result<(OpCode, usize), CompilerError>>,
+    que: VecDeque<(OpCode, usize)>,
 }
 
 impl<'a> Iterator for Parser<'a> {
     type Item = Result<(OpCode, usize), CompilerError>;
     fn next(&mut self) -> Option<Self::Item> {
-        todo!("implement this")
+        if self.previous.is_none() && self.current.is_none() {
+            if let Err(err) = self.advance() {
+                return Some(Err(err));
+            }
+        }
+        if self.que.is_empty() && !self.is_at_end() {
+            if let Err(err) = expression(self) {
+                return Some(Err(err));
+            }
+            if let Err(err) = self.advance_if_at_end("Expect end of expression.") {
+                return Some(Err(err));
+            }
+            self.end_compiler();
+        }
+        self.que.pop_front().map(|t| Ok(t))
     }
 }
 
@@ -39,6 +53,16 @@ impl<'a> Parser<'a> {
             ..Default::default()
         }
     }
+    pub(crate) fn emit_byte(&mut self, op_code: OpCode) {
+        let line = self.map_previous(|t| t.line).unwrap();
+        self.que.push_back((op_code, line));
+    }
+    pub(crate) fn emit_return(&mut self) {
+        self.emit_byte(OpCode::Return);
+    }
+    pub(crate) fn end_compiler(&mut self) {
+        self.emit_return();
+    }
     pub(crate) fn map_previous<T: FnOnce(&Token<'a>) -> U, U>(&self, func: T) -> Option<U> {
         self.previous.as_ref().map(func)
     }
@@ -52,7 +76,7 @@ impl<'a> Parser<'a> {
         self.current.as_ref().map_or(false, func)
     }
     pub(crate) fn is_at_end(&mut self) -> bool {
-        self.lexer.peek().is_none()
+        self.current.is_none()
     }
     pub(crate) fn advance(&mut self) -> Result<Option<Token<'a>>, CompilerError> {
         self.previous = self.current;
@@ -83,9 +107,9 @@ impl<'a> Parser<'a> {
             self.advance()
         } else {
             Err(CompilerError::new(
-                self.is_at_end(),
-                self.previous.unwrap_or_default(),
+                self.current,
                 message,
+                self.current.map(|t| t.line).unwrap_or_default(),
             ))
         }
     }
@@ -96,7 +120,11 @@ impl<'a> Parser<'a> {
         if self.is_at_end() {
             Ok(())
         } else {
-            Err(CompilerError::new(false, self.current.unwrap(), message))
+            Err(CompilerError::new(
+                None,
+                message,
+                self.current.map(|t| t.line).unwrap_or_default(),
+            ))
         }
     }
 }

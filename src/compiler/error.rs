@@ -1,48 +1,45 @@
 use std::fmt::Display;
 
 use crate::lexer::{ErrorToken, Token, TokenType};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilerError {
-    at_end: bool,
-    id: TokenType,
-    lexum: String,
+    token: Option<ErrorToken>,
     line: usize,
     message: String,
+    from_lexer: bool,
 }
 
 impl std::error::Error for CompilerError {}
 impl<'a> CompilerError {
-    pub(crate) fn new(at_end: bool, token: Token<'a>, message: impl ToString) -> Self {
+    pub(crate) fn new(token: Option<Token<'a>>, message: impl ToString, line: usize) -> Self {
         Self {
-            at_end,
-            id: token.id,
-            lexum: token.lexum.to_string(),
-            line: token.line,
+            token: token.map(|t| ErrorToken::new(t.lexum.to_string(), t.line)),
             message: message.to_string(),
+            line,
+            from_lexer: false,
         }
     }
 }
 
 impl<'a> Display for CompilerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut message = self.message.clone();
         write!(f, "[line {}] Error", self.line)?;
-        if self.at_end {
+        if self.token.is_none() {
             write!(f, " at end")?;
-        } else {
-            write!(f, " at '{}'", self.lexum)?;
+        } else if self.from_lexer {
+            let t = self.token.clone().unwrap();
+            message = t.message;
+        } else if let Some(tn) = self.token.as_ref() {
+            write!(f, " at '{}'", tn.message)?;
         }
-        write!(f, ": {}", self.message)
+        write!(f, ": {}", message)
     }
 }
 
 impl<'a> From<ErrorToken> for CompilerError {
     fn from(value: ErrorToken) -> Self {
-        Self {
-            at_end: false,
-            id: TokenType::None,
-            line: value.line,
-            lexum: String::new(),
-            message: value.message,
-        }
+        todo!()
     }
 }
