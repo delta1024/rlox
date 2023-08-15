@@ -11,8 +11,8 @@ pub(crate) fn interpret_instruction<'a, 'b>(
 ) -> ControlFlow<VmResult<()>> {
     match op_code {
         OpCode::Constant(v) => state.get_vm().push(v),
-        OpCode::Add | OpCode::Sub | OpCode::Mul | OpCode::Div => {
-            let (b, a) = (
+        OpCode::Add | OpCode::Sub | OpCode::Mul | OpCode::Div | OpCode::Equal |OpCode::Greater | OpCode::Less => {
+            let (a, b) = (
                 *state.get_vm().stack.peek(1).unwrap(),
                 *state.get_vm().stack.peek(0).unwrap(),
             );

@@ -48,6 +48,16 @@ impl GetRule for TokenType {
                 prefix: Some(unary),
                 ..Default::default()
             }),
+            Self::BangEqual | Self::EqualEqual => Some(ParseRule {
+                infix: Some(binary),
+                precedence: Precedence::Equality,
+                ..Default::default()
+            }),
+            Self::Greater | Self::Less | Self::GreaterEqual | Self::LessEqual => Some(ParseRule {
+                infix: Some(binary),
+                precedence: Precedence::Comparison,
+                ..Default::default()
+            }),
             Self::Plus => Some(ParseRule {
                 infix: Some(binary),
                 precedence: Precedence::Term,

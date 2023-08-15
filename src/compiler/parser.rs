@@ -58,6 +58,10 @@ impl<'a> Parser<'a> {
         let line = self.map_previous(|t| t.line).unwrap();
         self.que.push_back((op_code, line));
     }
+    pub(crate) fn emit_bytes(&mut self, op_code: OpCode, op_code2: OpCode) {
+	self.emit_byte(op_code);
+	self.emit_byte(op_code2);
+    }
     pub(crate) fn emit_return(&mut self) {
         self.emit_byte(OpCode::Return);
     }
@@ -104,7 +108,6 @@ impl<'a> Parser<'a> {
         id: TokenType,
         message: impl ToString,
     ) -> Result<Option<Token<'a>>, CompilerError> {
-
         if self.is_current(|t| t.id == id) {
             self.advance()
         } else {

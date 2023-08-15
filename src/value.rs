@@ -19,13 +19,13 @@ impl From<bool> for Value {
     }
 }
 impl Not for Value {
-    type Output = bool;
+    type Output = Value;
     fn not(self) -> Self::Output {
-        match self {
+        Value::Bool(match self {
             Self::Nil => true,
             Self::Bool(b) => !b,
             Self::Number(_) => false,
-        }
+        })
     }
 }
 impl Display for Value {

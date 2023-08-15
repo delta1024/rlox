@@ -11,6 +11,9 @@ pub(crate) enum BinaryOp {
     Sub(Value, Value),
     Mul(Value, Value),
     Div(Value, Value),
+    Equal(Value, Value),
+    Greater(Value, Value),
+    Less(Value, Value),
 }
 
 impl BinaryOp {
@@ -20,6 +23,9 @@ impl BinaryOp {
             OpCode::Sub => Self::Sub(a, b),
             OpCode::Mul => Self::Mul(a, b),
             OpCode::Div => Self::Div(a, b),
+            OpCode::Equal => Self::Equal(a, b),
+            OpCode::Greater => Self::Greater(a, b),
+            OpCode::Less => Self::Less(a, b),
             _ => unreachable!(),
         }
     }
@@ -27,11 +33,13 @@ impl BinaryOp {
 
 pub(crate) enum UnaryOp {
     Negate(Value),
+    Not(Value),
 }
 impl UnaryOp {
     pub(crate) fn new(op: OpCode, a: Value) -> Self {
         match op {
             OpCode::Neg => Self::Negate(a),
+            OpCode::Not => Self::Not(a),
             _ => unreachable!(),
         }
     }
@@ -66,7 +74,11 @@ impl Vm {
             BinaryOp::Sub(Value::Number(a), Value::Number(b)) => a - b,
             BinaryOp::Mul(Value::Number(a), Value::Number(b)) => a * b,
             BinaryOp::Div(Value::Number(a), Value::Number(b)) => a / b,
-            _ => return runtime_error!(state, "Operands must be two numbers."),
+
+            BinaryOp::Less(Value::Number(a), Value::Number(b)) => return Ok(Value::Bool(a < b)),
+            BinaryOp::Greater(Value::Number(a), Value::Number(b)) => return Ok(Value::Bool(a > b)),
+            BinaryOp::Equal(Value::Number(a), Value::Number(b)) => return Ok(Value::Bool(a == b)),
+            _ => runtime_error!(state, "Operands must be two numbers."),
         };
         Ok(Value::Number(num))
     }
@@ -76,7 +88,8 @@ impl Vm {
     ) -> VmResult<Value> {
         Ok(match instruction {
             UnaryOp::Negate(Value::Number(a)) => Value::Number(-a),
-            _ => return runtime_error!(state, "Operand must be a number"),
+            UnaryOp::Negate(_) => runtime_error!(state, "Operand must be a number"),
+            UnaryOp::Not(v) => !v,
         })
     }
 }

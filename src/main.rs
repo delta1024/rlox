@@ -25,8 +25,7 @@ fn main_loop<'a>(vm: &mut Vm, call_frame: &mut CallFrame<'a>) -> Result<(), Runt
     }
 }
 fn main() {
-
-    let chunk = match Parser::new("-(1 + 3)").collect::<Result<Chunk, CompilerError>>() {
+    let chunk = match Parser::new("1 > 3").collect::<Result<Chunk, CompilerError>>() {
         Ok(c) => c,
         Err(err) => {
             eprintln!("{err}");

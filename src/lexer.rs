@@ -177,7 +177,7 @@ where
             self.chars.next();
         }
 
-	let Some((cur_pos, ch)) = self.chars.next() else {
+        let Some((cur_pos, ch)) = self.chars.next() else {
 	    return None;
 	};
         self.line = line;
@@ -241,17 +241,22 @@ where
                 self.line,
             ),
             '0'..='9' => {
-
-		let mut pos = self.start_pos;
-		while Some(true) == self.chars.peek().map(|ch| match ch.1 {
-		    '0'..='9' | '.' => Some(true),
-		    _ => Some(false),
-		}).flatten() {
-		    self.chars.next();
-		    pos += 1;
-		}
+                let mut pos = self.start_pos;
+                while Some(true)
+                    == self
+                        .chars
+                        .peek()
+                        .map(|ch| match ch.1 {
+                            '0'..='9' | '.' => Some(true),
+                            _ => Some(false),
+                        })
+                        .flatten()
+                {
+                    self.chars.next();
+                    pos += 1;
+                }
                 let range = self.get_range(pos);
-		self.start_pos = pos;
+                self.start_pos = pos;
                 Token::new(
                     self.source[range.clone()].parse().unwrap(),
                     &self.source[range],
@@ -260,14 +265,18 @@ where
             }
             'a'..='z' | 'A'..='Z' => {
                 let mut s = self.start_pos;
-                while Some(true) == self.chars.peek().map(|x| match x.1 {
-                    'a'..='z' | 'A'..='Z' | '_' | '0'..='9' => {
-			Some(true)
-                    }
-                    _ => Some(false),
-                }).flatten() {
-		    s += 1;
-		    self.chars.next();
+                while Some(true)
+                    == self
+                        .chars
+                        .peek()
+                        .map(|x| match x.1 {
+                            'a'..='z' | 'A'..='Z' | '_' | '0'..='9' => Some(true),
+                            _ => Some(false),
+                        })
+                        .flatten()
+                {
+                    s += 1;
+                    self.chars.next();
                 }
                 let range = self.get_range(s);
                 Token::new(

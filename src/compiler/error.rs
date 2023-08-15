@@ -4,7 +4,7 @@ use crate::lexer::{ErrorToken, Token, TokenType};
 #[macro_export]
 macro_rules! error {
     ($parser:expr, $($arg:tt)*) => {
-	 Err(CompilerError::new(
+return	 Err(CompilerError::new(
 	    $parser.map_previous(|t| *t),
 	    std::format_args!($($arg)*),
 	    $parser.map_previous(|t| t.line).unwrap_or_default()))

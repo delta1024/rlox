@@ -10,13 +10,12 @@ use parse_rule::*;
 pub(crate) use parser::*;
 use precedence::*;
 
-use crate::{byte_code::OpCode, lexer::TokenType, value::Value};
+use crate::{byte_code::OpCode, lexer::TokenType};
 
 fn parse_precedence<'a>(parser: &mut Parser<'a>, prec: Precedence) -> Result<(), CompilerError> {
     parser.advance()?;
     let Some(parse_rule) = parser.map_previous(|t| t.id.get_rule().map(|r| r.prefix).flatten()).flatten() else {
-
-	return error!(parser, "Expect expression.");
+	error!(parser, "Expect expression.");
     };
     parse_rule(parser)?;
 
@@ -57,7 +56,7 @@ fn unary<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {
     parse_precedence(parser, Precedence::Unary)?;
     match id {
         TokenType::Minus => parser.emit_byte(OpCode::Neg),
-	TokenType::Bang => parser.emit_byte(OpCode::Not),
+        TokenType::Bang => parser.emit_byte(OpCode::Not),
         _ => unreachable!(),
     }
     Ok(())
@@ -80,6 +79,13 @@ fn binary<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {
         TokenType::Minus => parser.emit_byte(OpCode::Sub),
         TokenType::Star => parser.emit_byte(OpCode::Mul),
         TokenType::Slash => parser.emit_byte(OpCode::Div),
+	TokenType::BangEqual => parser.emit_bytes(OpCode::Equal, OpCode::Not),
+	TokenType::EqualEqual => parser.emit_byte(OpCode::Equal),
+	TokenType::Greater => parser.emit_byte(OpCode::Greater),
+	TokenType::GreaterEqual  => parser.emit_bytes(OpCode::Less, OpCode::Not),
+	TokenType::Less => parser.emit_byte(OpCode::Less),
+	TokenType::LessEqual => parser.emit_bytes(OpCode::Greater, OpCode::Not),
+
         _ => unreachable!(),
     }
     Ok(())
