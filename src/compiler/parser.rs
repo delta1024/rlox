@@ -2,11 +2,12 @@ use std::{collections::VecDeque, iter::Peekable};
 
 use crate::{
     byte_code::OpCode,
-    lexer::{Lexer, Token, TokenType}, error_at_current,
+    error_at_current,
+    lexer::{Lexer, Token, TokenType},
 };
 
 use super::{expression, CompilerError};
-
+#[derive(Debug)]
 pub(crate) struct Parser<'a> {
     previous: Option<Token<'a>>,
     current: Option<Token<'a>>,
@@ -88,25 +89,26 @@ impl<'a> Parser<'a> {
         self.current = x;
         Ok(self.current)
     }
-    pub(crate) fn advance_if<T: FnOnce(&Token<'a>) -> bool>(
-        &mut self,
-        func: T,
-    ) -> Result<Option<Token<'a>>, CompilerError> {
-        if self.is_current(func) {
-            self.advance()
-        } else {
-            Ok(None)
-        }
-    }
+    // pub(crate) fn advance_if<T: FnOnce(&Token<'a>) -> bool>(
+    //     &mut self,
+    //     func: T,
+    // ) -> Result<Option<Token<'a>>, CompilerError> {
+    //     if self.is_current(func) {
+    //         self.advance()
+    //     } else {
+    //         Ok(None)
+    //     }
+    // }
     pub(crate) fn advance_if_id(
         &mut self,
         id: TokenType,
         message: impl ToString,
     ) -> Result<Option<Token<'a>>, CompilerError> {
+
         if self.is_current(|t| t.id == id) {
             self.advance()
         } else {
-	    error_at_current!(self, "{}", message.to_string())
+            error_at_current!(self, "{}", message.to_string())
         }
     }
     pub(crate) fn advance_if_at_end(

@@ -57,6 +57,7 @@ fn unary<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {
     parse_precedence(parser, Precedence::Unary)?;
     match id {
         TokenType::Minus => parser.emit_byte(OpCode::Neg),
+	TokenType::Bang => parser.emit_byte(OpCode::Not),
         _ => unreachable!(),
     }
     Ok(())

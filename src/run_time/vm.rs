@@ -1,9 +1,9 @@
 use crate::{
     byte_code::OpCode,
     run_time::{RuntimeError, RuntimeState},
+    runtime_error,
     stack::Stack,
     value::Value,
-    runtime_error
 };
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum BinaryOp {
@@ -71,7 +71,7 @@ impl Vm {
         Ok(Value::Number(num))
     }
     pub(crate) fn unary_instruction<'a, 'b>(
-        state: &mut RuntimeState<'a,'b> ,
+        state: &mut RuntimeState<'a, 'b>,
         instruction: UnaryOp,
     ) -> VmResult<Value> {
         Ok(match instruction {

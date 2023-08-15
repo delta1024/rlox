@@ -10,38 +10,33 @@ pub(crate) enum Value {
 
 impl From<i64> for Value {
     fn from(value: i64) -> Self {
-	Self::Number(value)
+        Self::Number(value)
     }
 }
-impl From <bool> for Value {
+impl From<bool> for Value {
     fn from(value: bool) -> Self {
-	Self::Bool(value)
+        Self::Bool(value)
     }
-
 }
 impl Not for Value {
     type Output = bool;
     fn not(self) -> Self::Output {
-	match self {
-	    Self::Nil => true,
-	    Self::Bool(b) => !b,
-	    Self::Number(_) => false
-		
-	}
+        match self {
+            Self::Nil => true,
+            Self::Bool(b) => !b,
+            Self::Number(_) => false,
+        }
     }
 }
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-	match self {
-	    Self::Nil => write!(f, "nil"),
-	    Self::Number(n) => write!(f, "{n}"),
-	    Self::Bool(b) => write!(f, "{b}"),
-	}
+        match self {
+            Self::Nil => write!(f, "nil"),
+            Self::Number(n) => write!(f, "{n}"),
+            Self::Bool(b) => write!(f, "{b}"),
+        }
     }
 }
-
-
-
 
 impl Value {
     /// Returns `true` if the value is [`Bool`].

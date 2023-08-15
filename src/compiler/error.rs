@@ -18,7 +18,7 @@ macro_rules! error_at_current {
 	    std::format_args!($($arg)*),
 	    $parser.map_current(|t| t.line).unwrap_or_default()))
     }
-	
+
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilerError {

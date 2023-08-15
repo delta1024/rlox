@@ -13,6 +13,7 @@ pub(crate) enum OpCode {
     Nil,
     True,
     False,
+    Not,
 }
 
 impl From<u8> for OpCode {
@@ -28,6 +29,7 @@ impl From<u8> for OpCode {
             7 => Self::Nil,
             8 => Self::True,
             9 => Self::False,
+	    10 => Self::Not,
             _ => unreachable!(),
         }
     }
@@ -45,6 +47,7 @@ impl From<OpCode> for u8 {
             OpCode::Nil => 7,
             OpCode::True => 8,
             OpCode::False => 9,
+	    OpCode::Not => 10,
         }
     }
 }
@@ -73,7 +76,8 @@ impl ChunkBuilder {
             | OpCode::True
             | OpCode::False
             | OpCode::Nil
-            | OpCode::Neg => {
+		| OpCode::Neg
+		| OpCode::Not => {
                 self.code.push(byte.into());
                 self.lines.push(line as u8);
             }
@@ -100,7 +104,7 @@ impl Chunk {
     pub(crate) fn get_instruction(&self, pos: PositionCounter) -> (OpCode, PositionCounter) {
         let n = self.code[*pos];
         match n {
-            0 | 2..=9 => (n.into(), 1.into()),
+            0 | 2..=10 => (n.into(), 1.into()),
             1 => {
                 let p = self.code[*pos + 1] as usize;
                 let v = self.values[p];

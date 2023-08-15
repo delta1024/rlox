@@ -22,7 +22,11 @@ impl RuntimeError {
 }
 impl Display for RuntimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Error: {}\n[line {}] in script\n", self.message, self.line)
+        write!(
+            f,
+            "Error: {}\n[line {}] in script\n",
+            self.message, self.line
+        )
     }
 }
 impl std::error::Error for RuntimeError {}

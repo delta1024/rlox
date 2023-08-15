@@ -1,4 +1,5 @@
 use std::{
+    fmt::Debug,
     iter::Peekable,
     ops::{ControlFlow, RangeInclusive},
     str::{CharIndices, FromStr},
@@ -124,8 +125,14 @@ impl<'a> Token<'a> {
 pub(crate) struct Lexer<'a> {
     source: &'a str,
     start_pos: usize,
+    at_end: bool,
     pub(crate) line: usize,
     chars: Peekable<CharIndices<'a>>,
+}
+impl Debug for Lexer<'_> {
+    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
 }
 
 impl<'a> Lexer<'a> {
@@ -134,6 +141,7 @@ impl<'a> Lexer<'a> {
             source,
             start_pos: 0,
             line: 1,
+            at_end: false,
             chars: source.char_indices().peekable(),
         }
     }
@@ -148,17 +156,28 @@ where
 {
     type Item = LexerResult<'a>;
     fn next(&mut self) -> Option<Self::Item> {
+        if self.at_end {
+            return None;
+        }
         let mut line = self.line;
-        let ControlFlow::Break(((cur_pos, ch), line)) = self.chars.try_for_each(move |x| {
-	    match x.1 {
-		' ' | '\r' | '\t' => ControlFlow::Continue(()),
-		'\n' => {
-		    line += 1;
-		    ControlFlow::Continue(())
-		}
-		_ => ControlFlow::Break((x, line)),
-	    }
-        }) else {
+        while Some(true)
+            == self
+                .chars
+                .peek()
+                .map(|c| match c.1 {
+                    ' ' | '\r' | '\t' => Some(true),
+                    '\n' => {
+                        line += 1;
+                        Some(true)
+                    }
+                    _ => Some(false),
+                })
+                .flatten()
+        {
+            self.chars.next();
+        }
+
+	let Some((cur_pos, ch)) = self.chars.next() else {
 	    return None;
 	};
         self.line = line;
@@ -222,22 +241,17 @@ where
                 self.line,
             ),
             '0'..='9' => {
-                let mut s = 0;
-                let pos = match self.chars.try_for_each(|x| match x.1 {
-                    '0'..='9' => {
-                        s += 1;
-                        ControlFlow::Continue(())
-                    }
-                    '.' => {
-                        s += 1;
-                        ControlFlow::Continue(())
-                    }
-                    _ => ControlFlow::Break(x.0),
-                }) {
-                    ControlFlow::Break(n) => n - 1,
-                    ControlFlow::Continue(()) => cur_pos + s,
-                };
+
+		let mut pos = self.start_pos;
+		while Some(true) == self.chars.peek().map(|ch| match ch.1 {
+		    '0'..='9' | '.' => Some(true),
+		    _ => Some(false),
+		}).flatten() {
+		    self.chars.next();
+		    pos += 1;
+		}
                 let range = self.get_range(pos);
+		self.start_pos = pos;
                 Token::new(
                     self.source[range.clone()].parse().unwrap(),
                     &self.source[range],
@@ -245,18 +259,17 @@ where
                 )
             }
             'a'..='z' | 'A'..='Z' => {
-		let mut s = 0;
-                let pos = match self.chars.try_for_each(|x| match x.1 {
+                let mut s = self.start_pos;
+                while Some(true) == self.chars.peek().map(|x| match x.1 {
                     'a'..='z' | 'A'..='Z' | '_' | '0'..='9' => {
-			s += 1;
-			ControlFlow::Continue(())
-		    },
-                    _ => ControlFlow::Break(x.0),
-                }) {
-                    ControlFlow::Break(n) => n - 1,
-                    ControlFlow::Continue(()) => cur_pos + s,
-                };
-                let range = self.get_range(pos);
+			Some(true)
+                    }
+                    _ => Some(false),
+                }).flatten() {
+		    s += 1;
+		    self.chars.next();
+                }
+                let range = self.get_range(s);
                 Token::new(
                     self.source[range.clone()].parse().unwrap(),
                     &self.source[range],

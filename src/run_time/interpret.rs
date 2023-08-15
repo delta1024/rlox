@@ -1,9 +1,9 @@
 use std::ops::ControlFlow;
 
-use crate::byte_code::OpCode;
-use crate::value::Value;
 use super::vm::{BinaryOp, UnaryOp, Vm, VmResult};
 use super::RuntimeState;
+use crate::byte_code::OpCode;
+use crate::value::Value;
 
 pub(crate) fn interpret_instruction<'a, 'b>(
     state: &mut RuntimeState<'b, 'a>,
@@ -16,9 +16,7 @@ pub(crate) fn interpret_instruction<'a, 'b>(
                 *state.get_vm().stack.peek(1).unwrap(),
                 *state.get_vm().stack.peek(0).unwrap(),
             );
-            let v = match Vm::
-                binary_instruction(state,BinaryOp::new(op_code, a, b))
-            {
+            let v = match Vm::binary_instruction(state, BinaryOp::new(op_code, a, b)) {
                 Ok(v) => {
                     (0..=1).for_each(|_| {
                         _ = state.get_vm().stack.pop();
@@ -30,7 +28,7 @@ pub(crate) fn interpret_instruction<'a, 'b>(
 
             state.get_vm().push(v);
         }
-        OpCode::Neg => {
+        OpCode::Neg | OpCode::Not => {
             let v = *state.get_vm().stack.peek(0).unwrap();
             let v = match Vm::unary_instruction(state, UnaryOp::new(op_code, v)) {
                 Ok(v) => {
@@ -41,9 +39,9 @@ pub(crate) fn interpret_instruction<'a, 'b>(
             };
             state.get_vm().push(v);
         }
-	OpCode::Nil => state.get_vm().push(Value::Nil),
-	OpCode::True => state.get_vm().push(true.into()),
-	OpCode::False => state.get_vm().push(false.into()),
+        OpCode::Nil => state.get_vm().push(Value::Nil),
+        OpCode::True => state.get_vm().push(true.into()),
+        OpCode::False => state.get_vm().push(false.into()),
         OpCode::Return => {
             println!("{}", state.get_vm().pop().unwrap());
             return ControlFlow::Break(Ok(()));
