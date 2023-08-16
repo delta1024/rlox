@@ -1,13 +1,20 @@
 use std::{fmt::Display, ops::Not};
 
+use crate::heap::Object;
+
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub(crate) enum Value {
     #[default]
     Nil,
     Number(i64),
     Bool(bool),
+    Object(Object),
 }
-
+impl From<Object> for Value {
+    fn from(value: Object) -> Self {
+	Self::Object(value)
+    }
+}
 impl From<i64> for Value {
     fn from(value: i64) -> Self {
         Self::Number(value)
@@ -24,7 +31,7 @@ impl Not for Value {
         Value::Bool(match self {
             Self::Nil => true,
             Self::Bool(b) => !b,
-            Self::Number(_) => false,
+	    _ => false,
         })
     }
 }
@@ -34,6 +41,7 @@ impl Display for Value {
             Self::Nil => write!(f, "nil"),
             Self::Number(n) => write!(f, "{n}"),
             Self::Bool(b) => write!(f, "{b}"),
+	    Self::Object(o) => write!(f, "{o}"),
         }
     }
 }
@@ -77,5 +85,13 @@ impl Value {
         } else {
             Err(self)
         }
+    }
+
+    /// Returns `true` if the value is [`Object`].
+    ///
+    /// [`Object`]: Value::Object
+    #[must_use]
+    pub(crate) fn is_object(&self) -> bool {
+        matches!(self, Self::Object(..))
     }
 }

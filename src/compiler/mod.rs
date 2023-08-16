@@ -1,4 +1,4 @@
-use crate::error;
+use crate::{error, heap::ObjString};
 pub mod error;
 mod parse_rule;
 pub(crate) mod parser;
@@ -50,6 +50,12 @@ fn grouping<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {
     parser
         .advance_if_id(TokenType::RightParen, "Expect ')' after expression.")
         .map(|_| ())
+}
+fn string<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {
+    let s = parser.map_previous(|t| t.lexum).unwrap();
+    let o = parser.allocator.allocate_obj(ObjString::new(s));
+    parser.emit_byte(OpCode::Constant(o.into()));
+    Ok(())
 }
 fn unary<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {
     let id = parser.map_previous(|t| t.id).unwrap();

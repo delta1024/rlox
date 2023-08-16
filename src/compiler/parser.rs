@@ -3,7 +3,7 @@ use std::{collections::VecDeque, iter::Peekable};
 use crate::{
     byte_code::OpCode,
     error_at_current,
-    lexer::{Lexer, Token, TokenType},
+    lexer::{Lexer, Token, TokenType}, heap::Allocator,
 };
 
 use super::{expression, CompilerError};
@@ -13,6 +13,7 @@ pub(crate) struct Parser<'a> {
     current: Option<Token<'a>>,
     lexer: Peekable<Lexer<'a>>,
     que: VecDeque<(OpCode, usize)>,
+pub(super) allocator: Allocator,
 }
 
 impl<'a> Iterator for Parser<'a> {
@@ -43,14 +44,16 @@ impl<'a> Default for Parser<'a> {
             current: None,
             lexer: Lexer::new("").peekable(),
             que: VecDeque::new(),
+ allocator: Allocator::new(std::ptr::null_mut()),
         }
     }
 }
 
 impl<'a> Parser<'a> {
-    pub(crate) fn new(source: &'a str) -> Self {
+    pub(crate) fn new(source: &'a str, allocator: Allocator,) -> Self {
         Self {
             lexer: Lexer::new(source).peekable(),
+	    allocator,
             ..Default::default()
         }
     }

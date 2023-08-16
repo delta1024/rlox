@@ -3,6 +3,7 @@ use std::ops::ControlFlow;
 use byte_code::Chunk;
 use compiler::{CompilerError, Parser};
 use frame::CallFrame;
+use heap::{Heap, ObjString};
 use run_time::{RuntimeError, RuntimeState};
 mod byte_code;
 mod compiler;
@@ -10,6 +11,7 @@ mod frame;
 mod lexer;
 mod run_time;
 mod stack;
+mod heap;
 use run_time::vm::Vm;
 
 mod value;
@@ -25,7 +27,8 @@ fn main_loop<'a>(vm: &mut Vm, call_frame: &mut CallFrame<'a>) -> Result<(), Runt
     }
 }
 fn main() {
-    let chunk = match Parser::new("1 > 3").collect::<Result<Chunk, CompilerError>>() {
+    let mut heap = Heap::new();
+    let chunk = match Parser::new("\"hello\"", heap.allocator()).collect::<Result<Chunk, CompilerError>>() {
         Ok(c) => c,
         Err(err) => {
             eprintln!("{err}");
