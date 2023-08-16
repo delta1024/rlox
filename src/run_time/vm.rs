@@ -1,5 +1,6 @@
 use crate::{
     byte_code::OpCode,
+    heap::{Allocator, ObjPtr, ObjString, Object},
     run_time::{RuntimeError, RuntimeState},
     runtime_error,
     stack::Stack,
@@ -49,12 +50,14 @@ pub type VmResult<T> = std::result::Result<T, RuntimeError>;
 
 pub(crate) struct Vm {
     pub(crate) stack: Stack<Value>,
+    pub(crate) allocator: Allocator,
 }
 
 impl Vm {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(allocator: Allocator) -> Self {
         Self {
             stack: Stack::new(),
+            allocator,
         }
     }
     #[inline(always)]
@@ -71,13 +74,21 @@ impl Vm {
     ) -> VmResult<Value> {
         let num = match instruction {
             BinaryOp::Add(Value::Number(a), Value::Number(b)) => a + b,
+            BinaryOp::Add(Value::Object(a), Value::Object(b))
+                if a.is_obj::<ObjString>() && b.is_obj::<ObjString>() =>
+            {
+                return Ok(Vm::concatenate(state, a, b))
+            }
+            BinaryOp::Add(_, _) => {
+                runtime_error!(state, "Operands must be two numbers or two strings")
+            }
             BinaryOp::Sub(Value::Number(a), Value::Number(b)) => a - b,
             BinaryOp::Mul(Value::Number(a), Value::Number(b)) => a * b,
             BinaryOp::Div(Value::Number(a), Value::Number(b)) => a / b,
 
             BinaryOp::Less(Value::Number(a), Value::Number(b)) => return Ok(Value::Bool(a < b)),
             BinaryOp::Greater(Value::Number(a), Value::Number(b)) => return Ok(Value::Bool(a > b)),
-            BinaryOp::Equal(Value::Number(a), Value::Number(b)) => return Ok(Value::Bool(a == b)),
+            BinaryOp::Equal(a, b) => return Ok(Value::Bool(a == b)),
             _ => runtime_error!(state, "Operands must be two numbers."),
         };
         Ok(Value::Number(num))
@@ -91,5 +102,22 @@ impl Vm {
             UnaryOp::Negate(_) => runtime_error!(state, "Operand must be a number"),
             UnaryOp::Not(v) => !v,
         })
+    }
+    pub(crate) fn concatenate<'a, 'b>(
+        state: &mut RuntimeState<'a, 'b>,
+        a: Object,
+        b: Object,
+    ) -> Value {
+        let (a, b) = (a.as_obj::<ObjString>(), b.as_obj::<ObjString>());
+        let (a, b) = {
+            let a = a.as_ref();
+            let b = b.as_ref();
+            let a_len = a[..].len() - 1;
+            // remove the trailing and leading '"' from a and b respectivly
+            (&a[..a_len], &b[1..])
+        };
+        let result = format!("{a}{b}");
+        let obj = state.vm.allocator.allocate_string(result);
+        obj.into()
     }
 }

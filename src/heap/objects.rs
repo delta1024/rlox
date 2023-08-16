@@ -1,23 +1,28 @@
-use std::fmt::Display;
+//! This module provides concrete implementations of objects.
 
-use super::{IsObj, ObjPtr, ObjString, OpaquePtr};
+use super::{IsObj, ObjPtr, OpaquePtr};
+use std::{fmt::Display, ops::Deref};
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum ObjType {
     String,
 }
 #[derive(Copy, Clone)]
 pub(crate) struct ObjMetaData {
-    id: ObjType,
+    pub(crate) id: ObjType,
 }
 #[derive(Clone)]
 pub(crate) struct HeapObject {
-    meta_data: ObjMetaData,
-    ptr: OpaquePtr,
+    pub(super) meta_data: ObjMetaData,
+    pub(super) ptr: OpaquePtr,
 }
 impl Display for HeapObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.meta_data.id {
-            ObjType::String => write!(f, "{}", ObjPtr::<ObjString>::from_opaque(self.ptr)),
+            ObjType::String => write!(
+                f,
+                "{}",
+                ObjPtr::<ObjString>::from_opaque(self.ptr, &self.meta_data)
+            ),
         }
     }
 }
@@ -25,7 +30,7 @@ impl Drop for HeapObject {
     fn drop(&mut self) {
         match self.meta_data.id {
             ObjType::String => {
-                let obj_ptr = ObjPtr::<ObjString>::from_opaque(self.ptr)
+                let obj_ptr = ObjPtr::<ObjString>::from_opaque(self.ptr, &self.meta_data)
                     .to_inner()
                     .cast_mut();
                 unsafe {
@@ -37,34 +42,34 @@ impl Drop for HeapObject {
 }
 impl HeapObject {
     pub(crate) fn new<T: IsObj>(obj: T) -> Self {
-        let ptr = ObjPtr::new(obj);
         Self {
             meta_data: ObjMetaData { id: T::obj_id() },
-            ptr: ptr.into(),
+            ptr: OpaquePtr::new(Box::into_raw(Box::new(obj))),
         }
     }
 }
 #[repr(transparent)]
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub(crate) struct Object(*const HeapObject);
-impl Object {
-    pub(crate) fn new(obj: &HeapObject) -> Self {
-        Self(obj)
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ObjString(String);
+impl Deref for ObjString {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        &self.0[..]
     }
-    pub(crate) fn obj_id(&self) -> ObjType {
-        unsafe { self.0.as_ref().map(|t| t.meta_data.id).unwrap() }
+}
+impl Display for ObjString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
-    pub(crate) fn is_obj<T: IsObj>(&self) -> bool {
-        unsafe { T::obj_id() == self.0.as_ref().map(|t| t.meta_data.id).unwrap() }
-    }
-    pub(crate) fn as_obj<T: IsObj>(&self) -> ObjPtr<T> {
-        let r = unsafe { self.0.as_ref().map(|h| h.ptr).unwrap() };
-        ObjPtr::from_opaque(r)
+}
+impl ObjString {
+    pub(crate) fn new(s: impl ToString) -> Self {
+        Self(s.to_string())
     }
 }
 
-impl Display for Object {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", unsafe { self.0.as_ref().unwrap() })
+impl IsObj for ObjString {
+    fn obj_id() -> ObjType {
+        ObjType::String
     }
 }

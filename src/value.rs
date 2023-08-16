@@ -12,7 +12,7 @@ pub(crate) enum Value {
 }
 impl From<Object> for Value {
     fn from(value: Object) -> Self {
-	Self::Object(value)
+        Self::Object(value)
     }
 }
 impl From<i64> for Value {
@@ -31,7 +31,7 @@ impl Not for Value {
         Value::Bool(match self {
             Self::Nil => true,
             Self::Bool(b) => !b,
-	    _ => false,
+            _ => false,
         })
     }
 }
@@ -41,7 +41,7 @@ impl Display for Value {
             Self::Nil => write!(f, "nil"),
             Self::Number(n) => write!(f, "{n}"),
             Self::Bool(b) => write!(f, "{b}"),
-	    Self::Object(o) => write!(f, "{o}"),
+            Self::Object(o) => write!(f, "{o}"),
         }
     }
 }

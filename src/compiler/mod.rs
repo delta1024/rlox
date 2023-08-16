@@ -53,7 +53,7 @@ fn grouping<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {
 }
 fn string<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {
     let s = parser.map_previous(|t| t.lexum).unwrap();
-    let o = parser.allocator.allocate_obj(ObjString::new(s));
+    let o = parser.allocator.allocate_string(s);
     parser.emit_byte(OpCode::Constant(o.into()));
     Ok(())
 }
@@ -85,12 +85,12 @@ fn binary<'a>(parser: &mut Parser<'a>) -> Result<(), CompilerError> {
         TokenType::Minus => parser.emit_byte(OpCode::Sub),
         TokenType::Star => parser.emit_byte(OpCode::Mul),
         TokenType::Slash => parser.emit_byte(OpCode::Div),
-	TokenType::BangEqual => parser.emit_bytes(OpCode::Equal, OpCode::Not),
-	TokenType::EqualEqual => parser.emit_byte(OpCode::Equal),
-	TokenType::Greater => parser.emit_byte(OpCode::Greater),
-	TokenType::GreaterEqual  => parser.emit_bytes(OpCode::Less, OpCode::Not),
-	TokenType::Less => parser.emit_byte(OpCode::Less),
-	TokenType::LessEqual => parser.emit_bytes(OpCode::Greater, OpCode::Not),
+        TokenType::BangEqual => parser.emit_bytes(OpCode::Equal, OpCode::Not),
+        TokenType::EqualEqual => parser.emit_byte(OpCode::Equal),
+        TokenType::Greater => parser.emit_byte(OpCode::Greater),
+        TokenType::GreaterEqual => parser.emit_bytes(OpCode::Less, OpCode::Not),
+        TokenType::Less => parser.emit_byte(OpCode::Less),
+        TokenType::LessEqual => parser.emit_bytes(OpCode::Greater, OpCode::Not),
 
         _ => unreachable!(),
     }

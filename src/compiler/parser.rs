@@ -3,7 +3,8 @@ use std::{collections::VecDeque, iter::Peekable};
 use crate::{
     byte_code::OpCode,
     error_at_current,
-    lexer::{Lexer, Token, TokenType}, heap::Allocator,
+    heap::Allocator,
+    lexer::{Lexer, Token, TokenType},
 };
 
 use super::{expression, CompilerError};
@@ -13,7 +14,7 @@ pub(crate) struct Parser<'a> {
     current: Option<Token<'a>>,
     lexer: Peekable<Lexer<'a>>,
     que: VecDeque<(OpCode, usize)>,
-pub(super) allocator: Allocator,
+    pub(super) allocator: Allocator,
 }
 
 impl<'a> Iterator for Parser<'a> {
@@ -44,16 +45,16 @@ impl<'a> Default for Parser<'a> {
             current: None,
             lexer: Lexer::new("").peekable(),
             que: VecDeque::new(),
- allocator: Allocator::new(std::ptr::null_mut()),
+            allocator: Allocator::new(std::ptr::null_mut()),
         }
     }
 }
 
 impl<'a> Parser<'a> {
-    pub(crate) fn new(source: &'a str, allocator: Allocator,) -> Self {
+    pub(crate) fn new(source: &'a str, allocator: Allocator) -> Self {
         Self {
             lexer: Lexer::new(source).peekable(),
-	    allocator,
+            allocator,
             ..Default::default()
         }
     }
@@ -62,8 +63,8 @@ impl<'a> Parser<'a> {
         self.que.push_back((op_code, line));
     }
     pub(crate) fn emit_bytes(&mut self, op_code: OpCode, op_code2: OpCode) {
-	self.emit_byte(op_code);
-	self.emit_byte(op_code2);
+        self.emit_byte(op_code);
+        self.emit_byte(op_code2);
     }
     pub(crate) fn emit_return(&mut self) {
         self.emit_byte(OpCode::Return);
