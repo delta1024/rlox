@@ -1,3 +1,5 @@
+use crate::{value::Value, heap::{ObjPtr, ObjString}};
+
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum OpCode {
     Return,
@@ -14,6 +16,9 @@ pub(crate) enum OpCode {
     Equal,
     Greater,
     Less,
+    Print,
+    Pop,
+    DefineGlobal(ObjPtr<ObjString>),
 }
 
 impl From<u8> for OpCode {
@@ -33,6 +38,9 @@ impl From<u8> for OpCode {
             11 => OpCode::Equal,
             12 => OpCode::Greater,
             13 => OpCode::Less,
+            14 => OpCode::Print,
+            15 => OpCode::Pop,
+	    16 => OpCode::DefineGlobal(ObjPtr::default()),
             _ => unreachable!(),
         }
     }
@@ -54,6 +62,10 @@ impl From<OpCode> for u8 {
             OpCode::Equal => 11,
             OpCode::Greater => 12,
             OpCode::Less => 13,
+            OpCode::Print => 14,
+            OpCode::Pop => 15,
+	    OpCode::DefineGlobal(_) => 16,
         }
     }
 }
+pub(super) const OP_CODE_MAX: u8 = 15;

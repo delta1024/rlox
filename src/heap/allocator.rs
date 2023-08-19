@@ -1,4 +1,8 @@
-use super::{Heap, IsObj, Object};
+use std::collections::HashMap;
+
+use crate::value::Value;
+
+use super::{Heap, IsObj, ObjPtr, ObjString, Object};
 #[derive(Debug)]
 pub(crate) struct Allocator {
     heap_ptr: *mut Heap,
@@ -22,5 +26,8 @@ impl Allocator {
                 .map(|heap| heap.alloacte_string(string))
                 .unwrap()
         }
+    }
+    pub(crate) fn get_globals(&self) -> &mut HashMap<ObjPtr<ObjString>, Value> {
+        unsafe { &mut self.heap_ptr.as_mut().unwrap().globals }
     }
 }

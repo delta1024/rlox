@@ -1,8 +1,9 @@
-use crate::{frame::pc::PositionCounter, value::Value};
+use crate::{frame::pc::PositionCounter, value::Value, heap::Object};
 pub(crate) mod lines;
 pub(crate) use lines::*;
 pub(crate) mod op_code;
 pub(crate) use op_code::*;
+use op_code::OP_CODE_MAX;
 pub(crate) struct ChunkBuilder {
     code: Vec<u8>,
     values: Vec<Value>,
@@ -31,7 +32,9 @@ impl ChunkBuilder {
             | OpCode::Not
             | OpCode::Equal
             | OpCode::Greater
-            | OpCode::Less => {
+		| OpCode::Less
+		| OpCode::Print
+		| OpCode::Pop => {
                 self.code.push(byte.into());
                 self.lines.push(line as u8);
             }
@@ -43,6 +46,14 @@ impl ChunkBuilder {
                 self.code.push(pos);
                 self.lines.push(line as u8);
             }
+	    OpCode::DefineGlobal(v) => {
+		self.values.push(Value::Object(Object::from_ptr(&v)));
+		let pos = self.values.len() as u8 - 1;
+		self.code.push(byte.into());
+		self.lines.push(line as u8);
+		self.code.push(pos);
+		self.lines.push(line as u8);
+	    }
         }
         self
     }
@@ -58,12 +69,19 @@ impl Chunk {
     pub(crate) fn get_instruction(&self, pos: PositionCounter) -> (OpCode, PositionCounter) {
         let n = self.code[*pos];
         match n {
-            0 | 2..=13 => (n.into(), 1.into()),
+            0 | 2..=OP_CODE_MAX => (n.into(), 1.into()),
             1 => {
                 let p = self.code[*pos + 1] as usize;
                 let v = self.values[p];
                 (OpCode::Constant(v), 2.into())
             }
+	    16 => {
+		let p = self.code[*pos + 1] as usize;
+		let Value::Object(v) = self.values[p] else {
+		    unreachable!()
+		};
+		(OpCode::DefineGlobal(v.as_obj()), 2.into())
+	    }
             _ => unreachable!(),
         }
     }

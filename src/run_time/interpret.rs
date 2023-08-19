@@ -48,8 +48,18 @@ pub(crate) fn interpret_instruction<'a, 'b>(
         OpCode::Nil => state.get_vm().push(Value::Nil),
         OpCode::True => state.get_vm().push(true.into()),
         OpCode::False => state.get_vm().push(false.into()),
+	OpCode::DefineGlobal(name) => {
+	    let v = *state.get_vm().stack.peek(0).unwrap();
+	    state.get_vm().allocator.get_globals().insert(name, v);
+	    state.get_vm().pop();
+	}
+        OpCode::Print => {
+            println!("{}", state.get_vm().stack.peek(0).unwrap());
+        }
+        OpCode::Pop => {
+            state.get_vm().pop();
+        }
         OpCode::Return => {
-            println!("{}", state.get_vm().pop().unwrap());
             return ControlFlow::Break(Ok(()));
         }
     }

@@ -2,9 +2,12 @@ use std::ops::ControlFlow;
 
 use crate::lexer::TokenType;
 
-use super::{binary, grouping, literal, number, string, unary, CompilerError, Parser, Precedence};
+use super::{
+    binary, grouping, literal, number, string, unary, CompilerError, CompilerResult, Parser,
+    Precedence,
+};
 
-pub(super) type ParseFn = fn(&mut Parser) -> Result<(), CompilerError>;
+pub(super) type ParseFn = fn(&mut Parser) -> CompilerResult<()>;
 
 pub(super) struct ParseRule {
     pub(super) prefix: Option<ParseFn>,
