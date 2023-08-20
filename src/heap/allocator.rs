@@ -27,7 +27,4 @@ impl Allocator {
                 .unwrap()
         }
     }
-    pub(crate) fn get_globals(&self) -> &mut HashMap<ObjPtr<ObjString>, Value> {
-        unsafe { &mut self.heap_ptr.as_mut().unwrap().globals }
-    }
 }

@@ -23,6 +23,7 @@ pub(crate) enum OpCode {
     Pop,
     DefineGlobal(ObjPtr<ObjString>),
     GetGlobal(ObjPtr<ObjString>),
+    SetGlobal(ObjPtr<ObjString>),
 }
 
 impl From<u8> for OpCode {
@@ -44,8 +45,6 @@ impl From<u8> for OpCode {
             13 => OpCode::Less,
             14 => OpCode::Print,
             15 => OpCode::Pop,
-            16 => OpCode::DefineGlobal(ObjPtr::default()),
-            17 => OpCode::GetGlobal(ObjPtr::default()),
             _ => unreachable!(),
         }
     }
@@ -71,6 +70,7 @@ impl From<OpCode> for u8 {
             OpCode::Pop => 15,
             OpCode::DefineGlobal(_) => 16,
             OpCode::GetGlobal(_) => 17,
+            OpCode::SetGlobal(_) => 18,
         }
     }
 }

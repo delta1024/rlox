@@ -12,7 +12,6 @@ use crate::value::Value;
 
 pub(crate) struct Heap {
     strings: HashMap<String, ObjPtr<ObjString>>,
-    globals: HashMap<ObjPtr<ObjString>, Value>,
     objects: LinkedList<HeapObject>,
 }
 
@@ -20,7 +19,6 @@ impl Heap {
     pub(crate) fn new() -> Self {
         Self {
             objects: LinkedList::new(),
-            globals: HashMap::new(),
             strings: HashMap::new(),
         }
     }

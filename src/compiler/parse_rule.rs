@@ -4,7 +4,7 @@ use super::{
     binary, grouping, literal, number, string, unary, variable, CompilerResult, Parser, Precedence,
 };
 
-pub(super) type ParseFn = fn(&mut Parser) -> CompilerResult<()>;
+pub(super) type ParseFn = fn(&mut Parser, bool) -> CompilerResult<()>;
 
 pub(super) struct ParseRule {
     pub(super) prefix: Option<ParseFn>,

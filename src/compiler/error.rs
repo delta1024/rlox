@@ -1,4 +1,3 @@
-
 use std::fmt::Display;
 
 use crate::lexer::{ErrorToken, Token, TokenType};

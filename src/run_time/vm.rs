@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     byte_code::OpCode,
     heap::{Allocator, ObjPtr, ObjString, Object},
@@ -50,6 +52,7 @@ pub type VmResult<T> = std::result::Result<T, RuntimeError>;
 
 pub(crate) struct Vm {
     pub(crate) stack: Stack<Value>,
+    pub(crate) globals: HashMap<ObjPtr<ObjString>, Value>,
     pub(crate) allocator: Allocator,
 }
 
@@ -57,6 +60,7 @@ impl Vm {
     pub(crate) fn new(allocator: Allocator) -> Self {
         Self {
             stack: Stack::new(),
+            globals: HashMap::new(),
             allocator,
         }
     }

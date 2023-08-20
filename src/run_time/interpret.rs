@@ -51,14 +51,21 @@ pub(crate) fn interpret_instruction<'a, 'b>(
         OpCode::False => state.get_vm().push(false.into()),
         OpCode::DefineGlobal(name) => {
             let v = *state.get_vm().stack.peek(0).unwrap();
-            state.get_vm().allocator.get_globals().insert(name, v);
+            state.get_vm().globals.insert(name, v);
             state.get_vm().pop();
         }
         OpCode::GetGlobal(name) => {
-            let Some(value) = state.get_vm().allocator.get_globals().get(&name) else {
+            let Some(value) = state.get_vm().globals.get(&name) else {
 		return ControlFlow::Break(runtime_error!(state, "Undefined variable {}.", name));	    };
             let value = *value;
             state.get_vm().stack.push(value);
+        }
+        OpCode::SetGlobal(name) => {
+            let v = state.get_vm().stack.peek(0).map(|t| *t).unwrap();
+            if state.get_vm().globals.insert(name, v).is_none() {
+                state.get_vm().globals.remove(&name);
+                return ControlFlow::Break(runtime_error!(state, "Undefined variable {}.", name));
+            }
         }
         OpCode::Print => {
             println!("{}", state.get_vm().stack.peek(0).unwrap());

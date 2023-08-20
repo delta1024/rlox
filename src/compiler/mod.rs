@@ -1,6 +1,4 @@
-use std::convert::identity;
-
-use crate::{cur_matches, error as comp_error, heap::Object, lexer::Token, value::Value};
+use crate::{cur_matches, error as comp_error, lexer::Token};
 pub(crate) type CompilerResult<T> = Result<T, CompilerError>;
 pub mod error;
 mod parse_rule;
@@ -27,7 +25,8 @@ fn parse_precedence<'a>(parser: &mut Parser<'a>, prec: Precedence) -> CompilerRe
     let Some(parse_rule) = parser.map_previous(|t| t.id.get_rule().map(|r| r.prefix).flatten()).flatten() else {
 	comp_error!(parser, "Expect expression.");
     };
-    parse_rule(parser)?;
+    let can_assign = prec <= Precedence::Assignment;
+    parse_rule(parser, can_assign)?;
 
     while Some(true)
         == parser
@@ -39,7 +38,10 @@ fn parse_precedence<'a>(parser: &mut Parser<'a>, prec: Precedence) -> CompilerRe
             .map_previous(|t| t.id.get_rule().map(|r| r.infix).flatten())
             .flatten()
             .unwrap();
-        infix_rule(parser)?;
+        infix_rule(parser, can_assign)?;
+    }
+    if can_assign && cur_matches!(parser, Equal) {
+        comp_error!(parser, "Invalid assignment target.");
     }
     Ok(())
 }
@@ -72,14 +74,23 @@ fn decleration<'a>(parser: &mut Parser<'a>) {
         sync!(parser, err);
     }
 }
-fn named_variable<'a>(parser: &mut Parser<'a>, token: Token<'a>) -> CompilerResult<()> {
+fn named_variable<'a>(
+    parser: &mut Parser<'a>,
+    token: Token<'a>,
+    can_assign: bool,
+) -> CompilerResult<()> {
     let arg = parser.identifier_constant(token);
-    parser.emit_byte(OpCode::GetGlobal(arg));
+    if can_assign && cur_matches!(parser, Equal) {
+        expression(parser)?;
+        parser.emit_byte(OpCode::SetGlobal(arg));
+    } else {
+        parser.emit_byte(OpCode::GetGlobal(arg));
+    }
     Ok(())
 }
-fn variable<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
+fn variable<'a>(parser: &mut Parser<'a>, can_assign: bool) -> CompilerResult<()> {
     let token = parser.map_previous(|t| *t).unwrap();
-    named_variable(parser, token)
+    named_variable(parser, token, can_assign)
 }
 fn print_statement<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
     expression(parser)?;
@@ -104,7 +115,7 @@ fn statement<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
 fn expression<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
     parse_precedence(parser, Precedence::Assignment)
 }
-fn number<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
+fn number<'a>(parser: &mut Parser<'a>, _: bool) -> CompilerResult<()> {
     let num = parser
         .map_previous(|t| t.lexum)
         .unwrap()
@@ -113,20 +124,20 @@ fn number<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
     parser.emit_byte(OpCode::Constant(num.into()));
     Ok(())
 }
-fn grouping<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
+fn grouping<'a>(parser: &mut Parser<'a>, _: bool) -> CompilerResult<()> {
     expression(parser)?;
     parser
         .advance_if_id(TokenType::RightParen, "Expect ')' after expression.")
         .map(|_| ())
 }
 
-fn string<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
+fn string<'a>(parser: &mut Parser<'a>, _: bool) -> CompilerResult<()> {
     let s = parser.map_previous(|t| t.lexum).unwrap();
     let o = parser.allocator.allocate_string(s);
     parser.emit_byte(OpCode::Constant(o.into()));
     Ok(())
 }
-fn unary<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
+fn unary<'a>(parser: &mut Parser<'a>, _: bool) -> CompilerResult<()> {
     let id = parser.map_previous(|t| t.id).unwrap();
     parse_precedence(parser, Precedence::Unary)?;
     match id {
@@ -136,7 +147,7 @@ fn unary<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
     }
     Ok(())
 }
-fn literal<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
+fn literal<'a>(parser: &mut Parser<'a>, _: bool) -> CompilerResult<()> {
     match parser.map_previous(|t| t.id).unwrap() {
         TokenType::Nil => parser.emit_byte(OpCode::Nil),
         TokenType::True => parser.emit_byte(OpCode::True),
@@ -145,7 +156,7 @@ fn literal<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
     }
     Ok(())
 }
-fn binary<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
+fn binary<'a>(parser: &mut Parser<'a>, _: bool) -> CompilerResult<()> {
     let op_type = parser.map_previous(|t| t.id).unwrap();
     let rule = op_type.get_rule().unwrap();
     parse_precedence(parser, rule.precedence + 1)?;

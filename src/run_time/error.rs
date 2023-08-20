@@ -1,8 +1,6 @@
-use std::{fmt::Display, ops::ControlFlow};
+use std::fmt::Display;
 
-use super::vm::VmResult;
-
-use super::RuntimeState;
+use super::{vm::VmResult, RuntimeState};
 
 #[derive(Clone, Default, Debug)]
 pub struct RuntimeError {
@@ -15,11 +13,7 @@ macro_rules! runtime_error {
 	crate::run_time::error::runtime_error($runtime, std::format_args!($($args)*))
     }
 }
-impl RuntimeError {
-    pub fn new(message: String, line: u8) -> Self {
-        Self { message, line }
-    }
-}
+
 impl Display for RuntimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(

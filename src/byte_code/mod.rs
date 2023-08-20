@@ -46,7 +46,7 @@ impl ChunkBuilder {
                 self.code.push(pos);
                 self.lines.push(line as u8);
             }
-            OpCode::DefineGlobal(v) | OpCode::GetGlobal(v) => {
+            OpCode::DefineGlobal(v) | OpCode::GetGlobal(v) | OpCode::SetGlobal(v) => {
                 self.values.push(Value::Object(Object::from_ptr(&v)));
                 let pos = self.values.len() as u8 - 1;
                 self.code.push(byte.into());
@@ -67,6 +67,13 @@ pub(crate) struct Chunk {
 
 impl Chunk {
     pub(crate) fn get_instruction(&self, pos: PositionCounter) -> (OpCode, PositionCounter) {
+        let get_val_pos = || {
+            let p = self.code[*pos + 1] as usize;
+            let Value::Object(v) = self.values[p] else {
+		    unreachable!()
+		};
+            v
+        };
         let n = self.code[*pos];
         match n {
             0 | 2..=OP_CODE_MAX => (n.into(), 1.into()),
@@ -76,18 +83,16 @@ impl Chunk {
                 (OpCode::Constant(v), 2.into())
             }
             16 => {
-                let p = self.code[*pos + 1] as usize;
-                let Value::Object(v) = self.values[p] else {
-		    unreachable!()
-		};
+                let v = get_val_pos();
                 (OpCode::DefineGlobal(v.as_obj()), 2.into())
             }
             17 => {
-                let p = self.code[*pos + 1] as usize;
-                let Value::Object(v) = self.values[p] else {
-		    unreachable!()
-		};
+                let v = get_val_pos();
                 (OpCode::GetGlobal(v.as_obj()), 2.into())
+            }
+            18 => {
+                let v = get_val_pos();
+                (OpCode::SetGlobal(v.as_obj()), 2.into())
             }
             _ => unreachable!(),
         }
