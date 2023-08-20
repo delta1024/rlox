@@ -77,14 +77,17 @@ impl<'a> Parser<'a> {
         self.emit_byte(OpCode::Return);
     }
     pub(crate) fn define_variable(&mut self, name: ObjPtr<ObjString>) {
-	self.emit_byte(OpCode::DefineGlobal(name));
+        self.emit_byte(OpCode::DefineGlobal(name));
     }
-    fn identifier_constant(&mut self, name: Token<'a>) -> ObjPtr<ObjString> {
-	self.allocator.allocate_string(name.lexum).as_obj()
+    pub(super) fn identifier_constant(&mut self, name: Token<'a>) -> ObjPtr<ObjString> {
+        self.allocator.allocate_string(name.lexum).as_obj()
     }
-    pub(crate) fn parse_variable(&mut self, err_message: impl ToString) -> CompilerResult<ObjPtr<ObjString>> {
-	self.advance_if_id(TokenType::Identifier, err_message)?;
-	Ok(self.identifier_constant(self.previous.unwrap()))
+    pub(crate) fn parse_variable(
+        &mut self,
+        err_message: impl ToString,
+    ) -> CompilerResult<ObjPtr<ObjString>> {
+        self.advance_if_id(TokenType::Identifier, err_message)?;
+        Ok(self.identifier_constant(self.previous.unwrap()))
     }
     pub(crate) fn end_compiler(&mut self) {
         self.emit_return();

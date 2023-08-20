@@ -1,4 +1,5 @@
- use std::fmt::Display;
+
+use std::fmt::Display;
 
 use crate::lexer::{ErrorToken, Token, TokenType};
 #[macro_export]
@@ -61,4 +62,3 @@ impl<'a> From<ErrorToken> for CompilerError {
         todo!()
     }
 }
-

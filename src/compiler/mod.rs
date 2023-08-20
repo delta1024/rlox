@@ -1,4 +1,6 @@
-use crate::{cur_matches, error as comp_error};
+use std::convert::identity;
+
+use crate::{cur_matches, error as comp_error, heap::Object, lexer::Token, value::Value};
 pub(crate) type CompilerResult<T> = Result<T, CompilerError>;
 pub mod error;
 mod parse_rule;
@@ -15,9 +17,9 @@ use crate::{byte_code::OpCode, lexer::TokenType};
 
 macro_rules! sync {
     ($parser:expr, $err: expr) => {
-	$parser.que.push_back(Err($err));
-	$parser.syncronize()
-    }
+        $parser.que.push_back(Err($err));
+        $parser.syncronize()
+    };
 }
 
 fn parse_precedence<'a>(parser: &mut Parser<'a>, prec: Precedence) -> CompilerResult<()> {
@@ -44,11 +46,14 @@ fn parse_precedence<'a>(parser: &mut Parser<'a>, prec: Precedence) -> CompilerRe
 fn var_declaration<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
     let global = parser.parse_variable("Expect variable name.")?;
     if cur_matches!(parser, Equal) {
-	expression(parser)?;
+        expression(parser)?;
     } else {
-	 parser.emit_byte(OpCode::Nil);
+        parser.emit_byte(OpCode::Nil);
     }
-    parser.advance_if_id(TokenType::Semicolon, "Expect ';' after variable declaration.")?;
+    parser.advance_if_id(
+        TokenType::Semicolon,
+        "Expect ';' after variable declaration.",
+    )?;
     parser.define_variable(global);
     Ok(())
 }
@@ -56,16 +61,25 @@ fn decleration<'a>(parser: &mut Parser<'a>) {
     if match parser.matches(Some(TokenType::Var)) {
         Ok(b) => b,
         Err(err) => {
-	    sync!(parser, err);
+            sync!(parser, err);
             false
         }
     } {
-	if let Err(err) = var_declaration(parser) {
-	    sync!(parser, err);
-	}
+        if let Err(err) = var_declaration(parser) {
+            sync!(parser, err);
+        }
     } else if let Err(err) = statement(parser) {
-	sync!(parser, err); 
+        sync!(parser, err);
     }
+}
+fn named_variable<'a>(parser: &mut Parser<'a>, token: Token<'a>) -> CompilerResult<()> {
+    let arg = parser.identifier_constant(token);
+    parser.emit_byte(OpCode::GetGlobal(arg));
+    Ok(())
+}
+fn variable<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
+    let token = parser.map_previous(|t| *t).unwrap();
+    named_variable(parser, token)
 }
 fn print_statement<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
     expression(parser)?;
@@ -105,6 +119,7 @@ fn grouping<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
         .advance_if_id(TokenType::RightParen, "Expect ')' after expression.")
         .map(|_| ())
 }
+
 fn string<'a>(parser: &mut Parser<'a>) -> CompilerResult<()> {
     let s = parser.map_previous(|t| t.lexum).unwrap();
     let o = parser.allocator.allocate_string(s);

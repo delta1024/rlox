@@ -54,7 +54,10 @@ fn run_repl() -> Result<(), Error> {
             }
         };
         let mut frame = CallFrame::new(&chunk);
-        main_loop(&mut vm, &mut frame)?;
+        if let Err(err) = main_loop(&mut vm, &mut frame) {
+            eprintln!("{err}");
+            continue;
+        }
     }
 }
 fn run_file(file_name: &str) -> Result<(), Error> {

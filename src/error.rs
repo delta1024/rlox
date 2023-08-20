@@ -1,5 +1,5 @@
 use crate::{compiler::CompilerError, run_time::RuntimeError};
-use std::{error::Error as StdError, io::Error as IoError, fmt::Display};
+use std::{error::Error as StdError, fmt::Display, io::Error as IoError};
 
 #[derive(Debug)]
 pub enum Error {

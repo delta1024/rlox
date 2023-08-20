@@ -1,9 +1,9 @@
-use crate::{frame::pc::PositionCounter, value::Value, heap::Object};
+use crate::{frame::pc::PositionCounter, heap::Object, value::Value};
 pub(crate) mod lines;
 pub(crate) use lines::*;
 pub(crate) mod op_code;
-pub(crate) use op_code::*;
 use op_code::OP_CODE_MAX;
+pub(crate) use op_code::*;
 pub(crate) struct ChunkBuilder {
     code: Vec<u8>,
     values: Vec<Value>,
@@ -32,9 +32,9 @@ impl ChunkBuilder {
             | OpCode::Not
             | OpCode::Equal
             | OpCode::Greater
-		| OpCode::Less
-		| OpCode::Print
-		| OpCode::Pop => {
+            | OpCode::Less
+            | OpCode::Print
+            | OpCode::Pop => {
                 self.code.push(byte.into());
                 self.lines.push(line as u8);
             }
@@ -46,14 +46,14 @@ impl ChunkBuilder {
                 self.code.push(pos);
                 self.lines.push(line as u8);
             }
-	    OpCode::DefineGlobal(v) => {
-		self.values.push(Value::Object(Object::from_ptr(&v)));
-		let pos = self.values.len() as u8 - 1;
-		self.code.push(byte.into());
-		self.lines.push(line as u8);
-		self.code.push(pos);
-		self.lines.push(line as u8);
-	    }
+            OpCode::DefineGlobal(v) | OpCode::GetGlobal(v) => {
+                self.values.push(Value::Object(Object::from_ptr(&v)));
+                let pos = self.values.len() as u8 - 1;
+                self.code.push(byte.into());
+                self.lines.push(line as u8);
+                self.code.push(pos);
+                self.lines.push(line as u8);
+            }
         }
         self
     }
@@ -75,13 +75,20 @@ impl Chunk {
                 let v = self.values[p];
                 (OpCode::Constant(v), 2.into())
             }
-	    16 => {
-		let p = self.code[*pos + 1] as usize;
-		let Value::Object(v) = self.values[p] else {
+            16 => {
+                let p = self.code[*pos + 1] as usize;
+                let Value::Object(v) = self.values[p] else {
 		    unreachable!()
 		};
-		(OpCode::DefineGlobal(v.as_obj()), 2.into())
-	    }
+                (OpCode::DefineGlobal(v.as_obj()), 2.into())
+            }
+            17 => {
+                let p = self.code[*pos + 1] as usize;
+                let Value::Object(v) = self.values[p] else {
+		    unreachable!()
+		};
+                (OpCode::GetGlobal(v.as_obj()), 2.into())
+            }
             _ => unreachable!(),
         }
     }

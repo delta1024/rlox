@@ -1,4 +1,7 @@
-use crate::{value::Value, heap::{ObjPtr, ObjString}};
+use crate::{
+    heap::{ObjPtr, ObjString},
+    value::Value,
+};
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum OpCode {
@@ -19,6 +22,7 @@ pub(crate) enum OpCode {
     Print,
     Pop,
     DefineGlobal(ObjPtr<ObjString>),
+    GetGlobal(ObjPtr<ObjString>),
 }
 
 impl From<u8> for OpCode {
@@ -40,7 +44,8 @@ impl From<u8> for OpCode {
             13 => OpCode::Less,
             14 => OpCode::Print,
             15 => OpCode::Pop,
-	    16 => OpCode::DefineGlobal(ObjPtr::default()),
+            16 => OpCode::DefineGlobal(ObjPtr::default()),
+            17 => OpCode::GetGlobal(ObjPtr::default()),
             _ => unreachable!(),
         }
     }
@@ -64,7 +69,8 @@ impl From<OpCode> for u8 {
             OpCode::Less => 13,
             OpCode::Print => 14,
             OpCode::Pop => 15,
-	    OpCode::DefineGlobal(_) => 16,
+            OpCode::DefineGlobal(_) => 16,
+            OpCode::GetGlobal(_) => 17,
         }
     }
 }

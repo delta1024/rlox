@@ -80,7 +80,7 @@ impl Vm {
                 return Ok(Vm::concatenate(state, a, b))
             }
             BinaryOp::Add(_, _) => {
-                runtime_error!(state, "Operands must be two numbers or two strings")
+                return runtime_error!(state, "Operands must be two numbers or two strings")
             }
             BinaryOp::Sub(Value::Number(a), Value::Number(b)) => a - b,
             BinaryOp::Mul(Value::Number(a), Value::Number(b)) => a * b,
@@ -89,7 +89,7 @@ impl Vm {
             BinaryOp::Less(Value::Number(a), Value::Number(b)) => return Ok(Value::Bool(a < b)),
             BinaryOp::Greater(Value::Number(a), Value::Number(b)) => return Ok(Value::Bool(a > b)),
             BinaryOp::Equal(a, b) => return Ok(Value::Bool(a == b)),
-            _ => runtime_error!(state, "Operands must be two numbers."),
+            _ => return runtime_error!(state, "Operands must be two numbers."),
         };
         Ok(Value::Number(num))
     }
@@ -99,7 +99,7 @@ impl Vm {
     ) -> VmResult<Value> {
         Ok(match instruction {
             UnaryOp::Negate(Value::Number(a)) => Value::Number(-a),
-            UnaryOp::Negate(_) => runtime_error!(state, "Operand must be a number"),
+            UnaryOp::Negate(_) => return runtime_error!(state, "Operand must be a number"),
             UnaryOp::Not(v) => !v,
         })
     }

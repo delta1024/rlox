@@ -3,6 +3,7 @@ use std::ops::ControlFlow;
 use super::vm::{BinaryOp, UnaryOp, Vm, VmResult};
 use super::RuntimeState;
 use crate::byte_code::OpCode;
+use crate::runtime_error;
 use crate::value::Value;
 
 pub(crate) fn interpret_instruction<'a, 'b>(
@@ -48,11 +49,17 @@ pub(crate) fn interpret_instruction<'a, 'b>(
         OpCode::Nil => state.get_vm().push(Value::Nil),
         OpCode::True => state.get_vm().push(true.into()),
         OpCode::False => state.get_vm().push(false.into()),
-	OpCode::DefineGlobal(name) => {
-	    let v = *state.get_vm().stack.peek(0).unwrap();
-	    state.get_vm().allocator.get_globals().insert(name, v);
-	    state.get_vm().pop();
-	}
+        OpCode::DefineGlobal(name) => {
+            let v = *state.get_vm().stack.peek(0).unwrap();
+            state.get_vm().allocator.get_globals().insert(name, v);
+            state.get_vm().pop();
+        }
+        OpCode::GetGlobal(name) => {
+            let Some(value) = state.get_vm().allocator.get_globals().get(&name) else {
+		return ControlFlow::Break(runtime_error!(state, "Undefined variable {}.", name));	    };
+            let value = *value;
+            state.get_vm().stack.push(value);
+        }
         OpCode::Print => {
             println!("{}", state.get_vm().stack.peek(0).unwrap());
         }

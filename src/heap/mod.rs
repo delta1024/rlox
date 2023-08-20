@@ -20,7 +20,7 @@ impl Heap {
     pub(crate) fn new() -> Self {
         Self {
             objects: LinkedList::new(),
-	    globals: HashMap::new(),
+            globals: HashMap::new(),
             strings: HashMap::new(),
         }
     }

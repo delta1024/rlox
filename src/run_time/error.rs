@@ -12,7 +12,7 @@ pub struct RuntimeError {
 #[macro_export]
 macro_rules! runtime_error {
     ($runtime:expr, $($args:tt)*) => {
-	return crate::run_time::error::runtime_error($runtime, std::format_args!($($args)*))
+	crate::run_time::error::runtime_error($runtime, std::format_args!($($args)*))
     }
 }
 impl RuntimeError {

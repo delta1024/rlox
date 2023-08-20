@@ -1,5 +1,8 @@
 //! This module outlines the interface to a heap object.
-use std::{fmt::Display, hash::{Hash, Hasher}};
+use std::{
+    fmt::Display,
+    hash::{Hash, Hasher},
+};
 
 use super::{HeapObject, ObjMetaData, ObjString, ObjType};
 
@@ -20,18 +23,18 @@ impl OpaquePtr {
 pub(crate) struct ObjPtr<T: IsObj>(*const ObjMetaData, *const T);
 impl<T: IsObj> Default for ObjPtr<T> {
     fn default() -> Self {
-	Self(std::ptr::null(), std::ptr::null())
+        Self(std::ptr::null(), std::ptr::null())
     }
 }
 impl<T: IsObj> Hash for ObjPtr<T> {
-    fn hash<H:Hasher>(&self, state: &mut H) {
-	self.0.hash(state);
-	self.1.hash(state);
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+        self.1.hash(state);
     }
 }
 impl<T: IsObj> PartialEq for ObjPtr<T> {
     fn eq(&self, other: &Self) -> bool {
-	self.0 == other.0 && self.1 == other.1
+        self.0 == other.0 && self.1 == other.1
     }
 }
 impl<T: IsObj> Eq for ObjPtr<T> {}
