@@ -1,5 +1,6 @@
 //! This module provides concrete implementations of objects.
-
+extern crate obj_derive;
+use obj_derive::mark_obj;
 use super::{IsObj, ObjPtr, OpaquePtr};
 use std::{fmt::Display, ops::Deref};
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -48,8 +49,10 @@ impl HeapObject {
         }
     }
 }
+
 #[repr(transparent)]
 #[derive(Clone, Debug, Default)]
+#[mark_obj(String)]
 pub(crate) struct ObjString(String);
 impl Deref for ObjString {
     type Target = str;
@@ -68,8 +71,4 @@ impl ObjString {
     }
 }
 
-impl IsObj for ObjString {
-    fn obj_id() -> ObjType {
-        ObjType::String
-    }
-}
+

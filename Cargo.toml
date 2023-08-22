@@ -1,5 +1,10 @@
+[workspace]
+members = ["./obj_derive"]
 [package]
 name = "rlox"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+obj_derive= {path = "./obj_derive"}
 
